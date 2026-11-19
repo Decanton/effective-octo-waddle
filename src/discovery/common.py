@@ -35,7 +35,9 @@ def new_job(**kw) -> dict:
     keys = ("source", "external_id", "url", "apply_url", "title", "company", "location",
             "is_remote", "description", "posted_at", "age_hours", "applicant_count", "track")
     job = {k: kw.get(k) for k in keys}
-    job["title"] = (job["title"] or "").strip()
+    job["title"] = " ".join(unescape(job["title"] or "").split())
+    if job["company"]:
+        job["company"] = unescape(job["company"]).strip()
     job["apply_url"] = job["apply_url"] or job["url"]
     if job["is_remote"] is None:
         blob = f"{job['title']} {job['location'] or ''}".lower()

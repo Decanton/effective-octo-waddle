@@ -26,7 +26,7 @@ jobspy:
   stop_after_empty_searches: 3  # LinkedIn blocks fast scrapers; give up for the day after 3 empty searches
 
 # Jobs are dropped if any of these appear in the title (case-insensitive).
-title_exclude: [director, "vice president", "vp ", "head of", principal, "staff engineer", intern, internship, sales, recruiter, "account executive", nurse, teacher, driver]
+title_exclude: [director, "vice president", "vp ", "head of", principal, staff, intern, internship, sales, recruiter, "account executive", nurse, teacher, driver]
 
 # Jobs are dropped if any of these appear in the description.
 description_knockouts:

@@ -115,6 +115,7 @@ def test_pipeline_saves_and_exports(tmp_path, monkeypatch):
     db.init_db(ws.db_path)
     monkeypatch.setattr(pipeline.ats_api_fetcher, "fetch", lambda cfg: [_job(title="AI Trainer", url="g1")])
     monkeypatch.setattr(pipeline.jobspy_fetcher, "fetch", lambda cfg: [_job(title="Old", age_hours=50, url="l1")])
+    monkeypatch.setattr(pipeline.remote_boards, "fetch", lambda boards: [])
     res = pipeline.run(ws)
     assert res == {"found": 2, "kept": 1, "export": res["export"]}
     with db.session(ws.db_path) as c:
@@ -176,3 +177,10 @@ def test_linkedin_stops_after_empty_searches(monkeypatch):
     cfg = load_yaml("search_queries.yaml")
     cfg["jobspy"]["request_pause_seconds"] = 0
     assert jobspy_fetcher.fetch(cfg) == [] and len(calls) == 3
+
+
+def test_title_cleanup_and_staff_excluded():
+    j = _job(title="Staff Software Engineer - Query Planner &amp; Reflections", url="s1")
+    assert "&amp;" not in j["title"]
+    out = rank([j], load_profile(), load_yaml("search_queries.yaml"))
+    assert out[0]["status"] == "REJECTED_KNOCKOUT"
