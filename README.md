@@ -58,7 +58,7 @@ Settings live in `config/agent_settings.yaml`. With `auto_submit.enabled: true` 
 - there's no required consent box, unless you set `accept_required_consents: true`;
 - fewer than `max_per_day` applications went out today.
 
-Everything else waits on the review page, where **Send all ready** sends every complete form at once. A form where Submit was pressed but no thank-you page appeared is marked **sent? check** and is never sent twice.
+Everything else waits on the review page, where **Submit All Verified Jobs** submits every verified form at once (each is checked again first). A form where Submit was pressed but no thank-you page appeared is marked **sent? check** and is never sent twice.
 
 ## Applying by email
 Some jobs say "send your CV and cover letter to hr@company.com". The agent finds that address in the job post, or on the page the Apply link opens. It then writes a cover letter that uses only facts from your profile, and emails it with your tailored CV (both as Word files) from `EMAIL_ADDRESS`. It never uses privacy, accessibility, support or no-reply addresses. Each job is emailed once. Set `email_applications` in `config/agent_settings.yaml` (on, with up to 10 a day) to choose whether these go out automatically or wait on the review page, where they show as **by email** with the letter editable.
@@ -88,3 +88,22 @@ Copy `.env.example` to `.env` and fill it in before steps 3 and 4: a free Gemini
 
 ## Tests
 `.venv\Scripts\python.exe -m pip install pytest` then `.venv\Scripts\python.exe -m pytest tests`
+
+## Company career sites, portal accounts and the final check
+
+- **Job Agent Chrome over a local debugging port.** The agent attaches to the Job Agent Chrome window
+  (the desktop shortcut starts it with `--remote-debugging-port=9222`, reachable only from this laptop),
+  so it shares that window's Google sign-in and cookies. It works in its own tab and closes only tabs it opened.
+- **Apply buttons that open a new tab.** When "Apply" opens the company's site in a new tab, the agent
+  switches to that tab, fills the form there and attaches the tailored CV.
+- **Portal accounts.** If a career site needs an account and has no "Continue with Google", the agent signs
+  up with the job-search Gmail and a strong generated password. The password is stored encrypted
+  (Windows DPAPI) in the `portal_credentials` table and reused next time. It then waits up to 60 seconds for
+  the site's verification code or link in Gmail and completes it. It never solves a CAPTCHA, never ticks
+  marketing boxes, and stops if a phone check is required.
+- **Strict check before "verified ready".** A form is only marked verified when every required field is
+  filled, the CV (.docx or .pdf) is attached and no error message is showing. Anything else stays in
+  "Needs you" with the reason.
+- **Submit All Verified Jobs.** One button on the review page re-checks and submits every verified form,
+  waits for a confirmation message or page, and saves a receipt (page, confirmation text, time, screenshot).
+  Forms without a clear confirmation are marked "sent, not confirmed" and are never sent twice.

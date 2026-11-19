@@ -13,6 +13,8 @@ DEFAULTS = {
     "email_applications": {"enabled": False, "max_per_day": 10},
     "recruiter_replies": {"auto_send": False, "max_per_day": 10, "skip_categories": ["rejection", "offer"]},
     "google_sign_in": {"enabled": False, "allow_new_accounts": False},
+    "portal_accounts": {"enabled": False, "accept_terms": False, "code_wait_seconds": 60},
+    "browser": {"use_cdp": True, "cdp_port": 9222},
 }
 
 

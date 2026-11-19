@@ -8,7 +8,9 @@ auto_submit:
   max_per_day: 20
   # Only send on these application systems (their forms are standard and
   # show a clear "application received" page).
-  only_hosts: [greenhouse.io, lever.co, ashbyhq.com]
+  only_hosts: [greenhouse.io, lever.co, ashbyhq.com, workable.com, smartrecruiters.com, jobvite.com,
+               bamboohr.com, recruitee.com, teamtailor.com, personio.de, personio.com, breezy.hr,
+               applytojob.com, icims.com, myworkdayjobs.com, rippling.com, pinpointhq.com, freshteam.com]
   # Many forms have a required "I agree to the privacy policy" box.
   # false: those forms wait for you on the review page.
   # true: the agent ticks required privacy/consent boxes for you.
@@ -42,6 +44,23 @@ recruiter_replies:
   max_per_day: 10
   # These kinds of email always wait for you.
   skip_categories: [rejection, offer]
+
+portal_accounts:
+  # When a company's application site needs its own account (Workday, iCIMS and others),
+  # create one with EMAIL_ADDRESS and a strong random password, stored encrypted for
+  # your Windows user only (table portal_credentials), then read the 6-digit code or
+  # activation link from your inbox and finish the sign-up. Next time it signs in.
+  enabled: true
+  # Sign-up forms usually require accepting the site's terms. true: tick that box.
+  accept_terms: true
+  # How long to wait for the verification email.
+  code_wait_seconds: 60
+
+browser:
+  # Drive your "Job Agent Chrome" over a local debugging connection (port below), so
+  # sign-ins and open tabs are shared. It starts Chrome itself when it isn't running.
+  use_cdp: true
+  cdp_port: 9222
 
 email:
   # Read job alerts and recruiter messages from the inbox in .env (EMAIL_ADDRESS).

@@ -24,7 +24,11 @@ from . import email_apply, form_fields
 
 log = logging.getLogger("jobsprint")
 
-ATS_HOSTS = ("greenhouse.io", "lever.co", "ashbyhq.com")
+# Application systems whose pages are real application forms (company career sites run on these).
+ATS_HOSTS = ("greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com", "jobvite.com",
+             "bamboohr.com", "recruitee.com", "teamtailor.com", "personio.de", "personio.com", "breezy.hr",
+             "applytojob.com", "icims.com", "myworkdayjobs.com", "rippling.com", "jazzhr.com", "pinpointhq.com",
+             "freshteam.com", "zohorecruit.com", "manatal.com", "dover.com", "gem.com", "comeet.com")
 
 
 def application_url(job: dict) -> str | None:
@@ -46,6 +50,18 @@ def application_url(job: dict) -> str | None:
 
 APPLY_TEXT = re.compile(r"\bapply\b|application", re.I)
 SKIP_TEXT = re.compile(r"auto-?apply|copilot|with ai|alert|newsletter|subscribe|similar jobs", re.I)
+CLOSED_TEXT = re.compile(r"no longer (accepting|available|open)|position (has been|is) (filled|closed)|job (is|has) (closed|expired)|"
+                         r"this (job|posting|position|role) (is|has) (closed|expired|been (removed|filled))|"
+                         r"(job|page) (not found|doesn.?t exist)|applications? (are|is) (now )?closed|vacancy (is )?closed", re.I)
+
+
+def _closed(page) -> bool:
+    try:
+        return bool(CLOSED_TEXT.search((page.inner_text("body", timeout=3000) or "")[:6000]))
+    except Exception:
+        return False
+
+
 BLOCKED_TITLE = re.compile(r"just a moment|attention required|access denied|verify you are human", re.I)
 ACCOUNT_URL = re.compile(r"/(sign-?up|sign-?in|log-?in|register|create-account|join|auth|account|accounts|onboarding|"
                          r"welcome|get-started|getting-started|profile/(setup|create|edit)|settings|subscribe|pricing|"
@@ -142,20 +158,34 @@ def _settle(page):
     page.wait_for_timeout(1500)
 
 
-def _follow_to_ats(page, job: dict, depth: int = 2) -> str | None:
-    """Follow a job-board listing through its Apply link to the company's real form."""
+def _follow(page, job: dict, depth: int = 3):
+    """Follow a job-board listing through its Apply link to the company's real form.
+
+    Returns (url, active_page). When Apply opens the company site in a new tab, the
+    agent keeps working in THAT tab, so the site's session (and sign-in) stays intact.
+    """
     try:
         page.goto(job.get("apply_url") or job["url"], wait_until="domcontentloaded")
         _settle(page)
     except Exception:
-        return None
+        return None, page
     for _ in range(depth + 1):
         if _blocked(page):
-            return None
-        if any(h in urlparse(page.url).netloc for h in ATS_HOSTS):
-            return _ats_url(page.url)
-        if _has_form(page):
-            return page.url
+            return None, page
+        if any(h in urlparse(page.url).netloc for h in ATS_HOSTS) and not _account_page(page):
+            if _has_form(page):
+                return page.url, page
+            nxt = _ats_url(page.url)
+            if nxt != page.url:
+                try:
+                    page.goto(nxt, wait_until="domcontentloaded")
+                    _settle(page)
+                except Exception:
+                    pass
+            if _has_form(page):
+                return page.url, page
+        elif _has_form(page):
+            return page.url, page
         moved = False
         for kind, v in _candidates(page):
             before = page.url
@@ -164,12 +194,11 @@ def _follow_to_ats(page, job: dict, depth: int = 2) -> str | None:
                     page.goto(v, wait_until="domcontentloaded")
                 else:
                     try:
-                        with page.context.expect_page(timeout=5000) as new:
+                        with page.context.expect_page(timeout=6000) as new:
                             v.click()
-                        popup = new.value
+                        popup = new.value  # the company's site opened in a new tab: switch to it
                         popup.wait_for_load_state("domcontentloaded")
-                        page.goto(popup.url, wait_until="domcontentloaded")
-                        popup.close()
+                        page = popup
                     except Exception:
                         if page.url == before:
                             v.click()
@@ -180,28 +209,46 @@ def _follow_to_ats(page, job: dict, depth: int = 2) -> str | None:
                 moved = True
                 break
         if not moved:
-            return None
-    return page.url if _has_form(page) else None
+            return None, page
+    return (page.url if _has_form(page) else None), page
 
 
-def _google_then_retry(page, job: dict) -> str | None:
-    """On a sign-in page: try "Continue with Google", then look for the form again."""
+def _follow_to_ats(page, job: dict, depth: int = 3) -> str | None:
+    return _follow(page, job, depth)[0]
+
+
+def _sign_in_then_retry(page, job: dict, ws=None) -> str | None:
+    """On a sign-in page: try "Continue with Google", then a portal account (sign in, or create one
+    and confirm the email code), then look for the application form again."""
     import os
 
     from ..settings import load_settings
     from .google_signin import try_google
-    cfg = load_settings()["google_sign_in"]
+    settings = load_settings()
+    cfg = settings["google_sign_in"]
     account = os.environ.get("EMAIL_ADDRESS", "")
-    if not (cfg["enabled"] and account):
+    if not account:
         return None
-    result = try_google(page, account, bool(cfg["allow_new_accounts"]))
-    if result != "ok":
+    result = "off"
+    if cfg["enabled"]:
+        result = try_google(page, account, bool(cfg["allow_new_accounts"]))
         if result == "needs_password":
-            log.info("Google wants you to sign in first at %s. Run START_SPRINT.bat --login-setup once.", urlparse(page.url).netloc)
+            log.info("Google wants you to sign in first at %s. Open Job Agent Chrome and sign in once.", urlparse(page.url).netloc)
+    if result != "ok" and ws is not None and settings["portal_accounts"]["enabled"] and _account_page(page):
+        from .portal_accounts import sign_in_or_register
+        result = sign_in_or_register(page, ws, account, settings["portal_accounts"])
+    if result != "ok":
         return None
+    _settle(page)
     if _has_form(page):
         return page.url
-    return _follow_to_ats(page, job)
+    url, active = _follow(page, job)
+    if url and active is not page:
+        page.goto(url, wait_until="domcontentloaded")
+    return url
+
+
+_google_then_retry = _sign_in_then_retry  # older name
 
 
 def _needs_login(conn, jid: int, cv_id: int, at_url: str) -> str:
@@ -235,18 +282,22 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
         found = email_apply.find_apply_email(job.get("description") or "")
         if found:
             return email_apply.stage(conn, ws, job, cv_id, cv_path, cv.track, found, profile)
-    url = direct or _follow_to_ats(page, job)
+    active = page
+    if direct:
+        url = direct
+    else:
+        url, active = _follow(page, job)
     if not url:
         try:
-            found = email_apply.find_apply_email(page.inner_text("body", timeout=3000))
+            found = email_apply.find_apply_email(active.inner_text("body", timeout=3000))
         except Exception:
             found = None
         if found:
             return email_apply.stage(conn, ws, job, cv_id, cv_path, cv.track, found, profile)
-    if not url and _account_page(page) and not page.url.startswith("about:"):
-        url = _google_then_retry(page, job)
+    if not url and _account_page(active) and not active.url.startswith("about:"):
+        url = _sign_in_then_retry(active, job, ws)
         if not url:
-            return _needs_login(conn, jid, cv_id, page.url)
+            return _needs_login(conn, jid, cv_id, active.url)
     if not url:
         conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
                      (jid, cv_id, job.get("apply_url") or job["url"], "MANUAL_APPLY", db.now_iso(),
@@ -254,10 +305,17 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
         db.set_job_status(conn, jid, "MANUAL_APPLY", "apply yourself with the tailored CV")
         return "MANUAL_APPLY"
 
-    page.goto(url, wait_until="domcontentloaded")
-    page.wait_for_timeout(2500)
+    page = active  # keep working in the tab the company's site opened in
+    if page.url != url:
+        page.goto(url, wait_until="domcontentloaded")
+        page.wait_for_timeout(2500)
+    if _closed(page) and not form_fields.discover(page):
+        conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
+                     (jid, cv_id, url, "SKIPPED", db.now_iso(), "The job is closed or the posting was removed."))
+        db.set_job_status(conn, jid, "SKIPPED", "job closed")
+        return "SKIPPED"
     if _account_page(page):
-        retry = _google_then_retry(page, job)
+        retry = _sign_in_then_retry(page, job, ws)
         if retry and retry != url:
             page.goto(retry, wait_until="domcontentloaded")
             page.wait_for_timeout(2500)
@@ -285,6 +343,12 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
         if rec["needs_user"] and not a.consent:
             missing.append(f["label"])
 
+    # Strict check, as a real Submit would see it: every required field filled, CV attached, no errors shown.
+    consent_ids = tuple(f["id"] for f, a in zip(fields, answers) if a["consent"])
+    problems = form_fields.verify(page, consent_ids)
+    if problems:
+        log.info("  not verified: %s", "; ".join(problems[:5]))
+        missing += [p for p in problems if p not in missing]
     shot = ws.screenshots / f"{jid}_{_safe(job.get('company'))}_staged.png"
     page.screenshot(path=str(shot), full_page=True)
     state = "NEEDS_USER_INPUT" if missing else "READY_TO_SUBMIT"
@@ -319,8 +383,17 @@ def run(ws, limit: int | None = None) -> dict:
         return counts
     log.info("Staging %d jobs. The browser fills each form and stops before Submit.", len(jobs))
     with browser(ws) as ctx:
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page = ctx.pages[-1] if ctx.pages else ctx.new_page()  # the agent's own tab
+        yours = {p for p in ctx.pages if p is not page}  # tabs you had open: never touched
         for i, job in enumerate(jobs, 1):
+            if page.is_closed():  # a site closed our tab: open a fresh one
+                page = ctx.new_page()
+            for extra in list(ctx.pages):  # tabs the previous job opened
+                if extra is not page and extra not in yours and not extra.is_closed():
+                    try:
+                        extra.close()
+                    except Exception:
+                        pass
             with db.session(ws.db_path) as conn:
                 try:
                     state = stage_job(page, conn, ws, job, engine, profile)
@@ -328,6 +401,12 @@ def run(ws, limit: int | None = None) -> dict:
                     log.warning("Staging failed for %s at %s: %s", job["title"], job.get("company"), exc)
                     db.set_job_status(conn, job["id"], "FAILED", str(exc)[:200])
                     state = "FAILED"
+                    if "closed" in str(exc).lower():
+                        try:
+                            page = ctx.new_page()
+                        except Exception:
+                            log.error("The browser closed. Stopping this staging run; the rest wait for the next run.")
+                            break
             counts[state] = counts.get(state, 0) + 1
             log.info("[%d/%d] %s: %s @ %s", i, len(jobs), state, job["title"][:60], job.get("company"))
     log.info("Staging done: %s", ", ".join(f"{k} {v}" for k, v in counts.items()))

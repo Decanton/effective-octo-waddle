@@ -46,9 +46,15 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
 
     # Visible by default so you can solve a CAPTCHA; JOBSPRINT_HEADLESS=1 is for tests.
     with browser(ws, headless=os.environ.get("JOBSPRINT_HEADLESS") == "1") as ctx:
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page = ctx.pages[-1] if ctx.pages else ctx.new_page()  # the agent's own tab
         page.goto(row["form_url"], wait_until="domcontentloaded")
         page.wait_for_timeout(2500)
+        from .form_stager import _closed
+        if _closed(page) and not form_fields.discover(page):
+            with db.session(ws.db_path) as conn:
+                conn.execute("UPDATE staged_forms SET state = 'SKIPPED', error = ? WHERE id = ?", ("The job closed before sending.", staged_id))
+                db.set_job_status(conn, row["job_id"], "SKIPPED", "job closed before sending")
+            return {"ok": False, "error": "the job is closed; nothing was submitted"}
         if page.locator("input[type=password]:visible").count() > 0:
             return {"ok": False, "error": "this page asks for a password, so it is a sign-up or login page, not an application. Nothing was submitted."}
         missing = []
@@ -68,6 +74,10 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
             ok = form_fields.fill_field(page, f, value)
             if f["required"] and not ok:
                 missing.append(f["label"])
+        consent_ids = tuple(f["id"] for f in form_fields.discover(page)
+                            if saved.get(_key(f["label"], f["kind"]), {}).get("consent")
+                            and " ".join(f["label"].lower().split()) not in consents)
+        missing += [p for p in form_fields.verify(page, consent_ids) if p not in missing]
         if missing:
             shot = ws.screenshots / f"{row['job_id']}_not_submitted.png"
             page.screenshot(path=str(shot), full_page=True)
@@ -85,8 +95,16 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
             confirmed = bool(CONFIRM.search(page.inner_text("body") or ""))
         shot = ws.screenshots / f"{row['job_id']}_submitted.png"
         page.screenshot(path=str(shot), full_page=True)
+        try:
+            body = page.inner_text("body") or ""
+        except Exception:
+            body = ""
+        m = CONFIRM.search(body)
+        receipt = {"url": page.url, "confirmation": body[max(0, m.start() - 80): m.end() + 160].strip() if m else None,
+                   "submitted_at": db.now_iso(), "screenshot": str(shot)}
 
     with db.session(ws.db_path) as conn:
+        conn.execute("UPDATE staged_forms SET receipt_json = ? WHERE id = ?", (json.dumps(receipt), staged_id))
         if confirmed:
             conn.execute("UPDATE staged_forms SET state = 'SUBMITTED', submitted_at = ? WHERE id = ?", (db.now_iso(), staged_id))
             db.set_job_status(conn, row["job_id"], "SUBMITTED")

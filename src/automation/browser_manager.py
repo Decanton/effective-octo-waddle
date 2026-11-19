@@ -51,19 +51,78 @@ def profile_dir(ws):
     return ws.browser_profile
 
 
+def _cdp_up(port: int) -> bool:
+    import requests
+    try:
+        return requests.get(f"http://127.0.0.1:{port}/json/version", timeout=1.5).ok
+    except Exception:
+        return False
+
+
+def start_debug_chrome(ws, port: int, urls: list[str] | None = None) -> bool:
+    """Start Job Agent Chrome with a local debugging port (only this laptop can connect)."""
+    import subprocess
+    import time
+    chrome = find_chrome()
+    if not chrome:
+        return False
+    if _cdp_up(port):
+        return True
+    subprocess.Popen([chrome, *chrome_args(ws), f"--remote-debugging-port={port}", "--remote-debugging-address=127.0.0.1",
+                      "--no-first-run", "--no-default-browser-check", *(urls or [])])
+    for _ in range(40):
+        time.sleep(0.5)
+        if _cdp_up(port):
+            return True
+    log.warning("Job Agent Chrome didn't open its debugging port. If a Job Agent Chrome window is already open "
+                "(started without the shortcut), close it and run again.")
+    return False
+
+
+def _use_cdp(headless: bool) -> tuple[bool, int]:
+    from ..settings import load_settings
+    cfg = load_settings().get("browser") or {}
+    port = int(cfg.get("cdp_port", 9222))
+    ok = bool(cfg.get("use_cdp")) and not headless and not os.environ.get("JOBSPRINT_CHROMIUM_PATH") \
+        and os.environ.get("JOBSPRINT_NO_CDP") != "1" and find_chrome() is not None
+    return ok, port
+
+
 @contextmanager
 def browser(ws, headless: bool | None = None):
-    """Yield a persistent Playwright browser context (your Chrome when installed)."""
+    """Yield a browser context.
+
+    Normally this is your Job Agent Chrome, reached over the local debugging port, so its
+    Google sign-in, cookies and tabs are shared with the agent. If that isn't possible it
+    falls back to launching Chrome (or the bundled Chromium) on the same profile.
+    """
     from playwright.sync_api import sync_playwright
     if headless is None:
         headless = os.environ.get("JOBSPRINT_HEADLESS", "0") == "1"
     exe = os.environ.get("JOBSPRINT_CHROMIUM_PATH") or None
     chrome = None if exe else find_chrome()
-    data_dir, extra = profile_dir(ws), []
-    copy = _copied_profile(ws) if chrome else None
-    if copy:  # your own profile, copied with --use-chrome-profile
-        data_dir, extra = copy[0], [f"--profile-directory={copy[1]}"]
+    cdp, port = _use_cdp(headless)
     with sync_playwright() as pw:
+        if cdp and start_debug_chrome(ws, port):
+            b = pw.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
+            ctx = b.contexts[0] if b.contexts else b.new_context()
+            ctx.set_default_timeout(15000)
+            before = set(ctx.pages)
+            ctx.new_page()  # the agent works in its own tab
+            try:
+                yield ctx
+            finally:
+                for p in ctx.pages:  # close the tabs this run opened; leave your tabs and Chrome running
+                    if p not in before and not p.is_closed():
+                        try:
+                            p.close()
+                        except Exception:
+                            pass
+            return
+        data_dir, extra = profile_dir(ws), []
+        copy = _copied_profile(ws) if chrome else None
+        if copy:  # your own profile, copied with --use-chrome-profile
+            data_dir, extra = copy[0], [f"--profile-directory={copy[1]}"]
         ctx = pw.chromium.launch_persistent_context(
             str(data_dir), headless=headless, executable_path=exe or chrome,
             viewport={"width": 1280, "height": 900}, accept_downloads=False,
@@ -87,6 +146,13 @@ def open_chrome(ws, urls: list[str] | None = None) -> None:
     chrome = find_chrome()
     if not chrome:
         print("Google Chrome was not found.")
+        return
+    cdp, port = _use_cdp(False)
+    if cdp:
+        if _cdp_up(port):
+            subprocess.Popen([chrome, *chrome_args(ws), *(urls or ["about:newtab"])])  # new window in the running one
+        else:
+            start_debug_chrome(ws, port, urls)
         return
     subprocess.Popen([chrome, *chrome_args(ws), "--no-first-run", "--no-default-browser-check", *(urls or [])])
 
@@ -125,14 +191,19 @@ def login_setup(ws) -> None:
     chrome = None if os.environ.get("JOBSPRINT_CHROMIUM_PATH") else find_chrome()
     msg = (f"\nA browser window is open. On the first tab, sign in to Google as {account or 'your job-search Gmail'}.\n"
            "Then on the other tabs, use 'Continue with Google' (or sign in / sign up) on each site you use.\n")
-    if chrome:
+    cdp, _port = _use_cdp(False)
+    if chrome and cdp:
+        open_chrome(ws, [u for _, u in pages])
+        print(msg + "When you're done, come back here and press Enter. (You can leave Job Agent Chrome open.)")
+        input()
+    elif chrome:
         proc = subprocess.Popen([chrome, *chrome_args(ws), "--no-first-run",
                                  "--no-default-browser-check", *[u for _, u in pages]])
         print(msg + "When you're done, close that Chrome window. The sign-ins are saved for the agent.")
         proc.wait()
     else:
         with browser(ws, headless=False) as ctx:
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            page = ctx.pages[-1] if ctx.pages else ctx.new_page()  # the agent's own tab
             for i, (name, url) in enumerate(pages):
                 p = page if i == 0 else ctx.new_page()
                 try:

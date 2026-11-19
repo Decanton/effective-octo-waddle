@@ -33,7 +33,7 @@ def create_app(ws) -> FastAPI:
     def staged():
         with db.session(ws.db_path) as c:
             rows = c.execute("""
-                SELECT s.id, s.state, s.form_url, s.answers_json, s.missing_json, s.error, s.created_at, s.submitted_at,
+                SELECT s.id, s.state, s.form_url, s.answers_json, s.missing_json, s.error, s.created_at, s.submitted_at, s.receipt_json,
                        j.id AS job_id, j.title, j.company, j.location, j.age_hours, j.applicant_count, j.track,
                        j.priority_score, j.fit_score, j.url, j.source, t.docx_path, t.matched_keywords,
                        (SELECT path FROM screenshots WHERE staged_form_id = s.id ORDER BY id DESC LIMIT 1) AS shot
@@ -50,6 +50,7 @@ def create_app(ws) -> FastAPI:
             d["missing"] = json.loads(d.pop("missing_json") or "[]")
             d["has_shot"] = bool(d.pop("shot"))
             d["has_cv"] = bool(d.pop("docx_path"))
+            d["receipt"] = json.loads(d.pop("receipt_json") or "null")
             out.append(d)
         return out
 

@@ -254,6 +254,31 @@ def main(argv=None) -> int:
         return 0
 
     # Daily sprint: check profile, find and rank jobs, stage forms, then open the review page.
+    lock = ws.data / "sprint.lock"
+    try:
+        import os as _os
+        fd = _os.open(str(lock), _os.O_CREAT | _os.O_EXCL | _os.O_WRONLY)
+        _os.write(fd, str(_os.getpid()).encode())
+        _os.close(fd)
+    except FileExistsError:
+        age_h = (datetime.now().timestamp() - lock.stat().st_mtime) / 3600
+        if age_h < 3:
+            log.error("Another run started %.0f minutes ago and is still going. Try again when it finishes.", age_h * 60)
+            return 1
+        log.warning("Removing a stale run lock from %.1f hours ago.", age_h)
+        lock.unlink(missing_ok=True)
+        return main(argv)
+    try:
+        rc = _daily(ws, log, args)
+    finally:
+        lock.unlink(missing_ok=True)
+    if rc == 0 and not args.no_review:
+        from src.web.server import serve
+        serve(ws)
+    return rc
+
+
+def _daily(ws, log, args) -> int:
     if check(log):
         log.error("Fix the profile problems above, then run again.")
         return 1
@@ -261,9 +286,6 @@ def main(argv=None) -> int:
     stage(ws, log, args.stage_limit)
     if not args.no_send:
         send_all(ws, log)
-    if not args.no_review:
-        from src.web.server import serve
-        serve(ws)
     return 0
 
 

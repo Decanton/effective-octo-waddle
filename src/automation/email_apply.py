@@ -160,6 +160,15 @@ def send(ws, staged_id: int, overrides: dict | None = None, smtp_factory=None) -
         return {"ok": False, "error": f"bad address: {to}"}
     if re.search(r"\[[^\]]*\]", letter):
         return {"ok": False, "error": "the cover letter still has a placeholder in [brackets]"}
+    with db.session(ws.db_path) as conn:
+        dup = conn.execute("SELECT 1 FROM staged_forms s JOIN jobs j ON j.id = s.job_id WHERE s.id != ? AND s.form_url = ? "
+                           "AND s.state IN ('SUBMITTED','SENT_UNCONFIRMED') AND lower(j.title) = lower(?)",
+                           (staged_id, row["form_url"], row["title"])).fetchone()
+        if dup:
+            conn.execute("UPDATE staged_forms SET state = 'SKIPPED', error = ? WHERE id = ?",
+                         ("Already emailed this application from another listing.", staged_id))
+            db.set_job_status(conn, row["job_id"], "SKIPPED", "duplicate of an application already emailed")
+            return {"ok": False, "error": "already emailed this job from another listing"}
     if not cv or not Path(cv["docx_path"]).exists():
         return {"ok": False, "error": "tailored CV file is missing"}
     addr, pw = os.environ.get("EMAIL_ADDRESS"), os.environ.get("EMAIL_APP_PASSWORD")

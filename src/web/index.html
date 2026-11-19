@@ -114,7 +114,7 @@
   <div class="hdr-actions">
     <button class="btn" id="runlogin" title="Opens a browser where you sign in to Google and job sites once">Sign in to sites</button>
     <button class="btn" id="runsprint" title="Reads your inbox, finds new jobs, fills forms and sends the complete ones">Find &amp; apply now</button>
-    <button class="btn primary" id="sendall" title="Send every complete application now">Send all ready</button>
+    <button class="btn primary" id="sendall" title="Submit every verified application now">Submit All Verified Jobs</button>
   </div>
 </header>
 <section class="stats" id="stats"></section>
@@ -142,14 +142,14 @@ const host = u => { try { return u.startsWith("mailto:") ? u.slice(7) : new URL(
 const ago = iso => { if (!iso) return ""; const h = (Date.now() - new Date(iso)) / 36e5; return h < 1 ? "just now" : h < 24 ? `${Math.round(h)}h ago` : `${Math.round(h / 24)}d ago`; };
 
 const STATE = {
-  READY_TO_SUBMIT:  { chip: "ok",   label: "ready",          group: "ready" },
+  READY_TO_SUBMIT:  { chip: "ok",   label: "verified ready", group: "ready" },
   NEEDS_USER_INPUT: { chip: "warn", label: "needs you",      group: "needs" },
   NEEDS_LOGIN:      { chip: "info", label: "sign in once",   group: "login" },
   MANUAL_APPLY:     { chip: "",     label: "apply yourself", group: "manual" },
   SENT_UNCONFIRMED: { chip: "warn", label: "sent? check",    group: "sent" },
   SUBMITTED:        { chip: "ok",   label: "sent",           group: "sent" },
 };
-const FILTERS = [["todo", "To do"], ["ready", "Ready"], ["needs", "Needs you"], ["login", "Sign in"], ["manual", "Apply yourself"], ["sent", "Sent"], ["all", "All"]];
+const FILTERS = [["todo", "To do"], ["ready", "Verified"], ["needs", "Needs you"], ["login", "Sign in"], ["manual", "Apply yourself"], ["sent", "Sent"], ["all", "All"]];
 const inFilter = it => { const g = (STATE[it.state] || {}).group; return filter === "all" || (filter === "todo" ? g !== "sent" : g === filter); };
 const stateChip = s => { const d = STATE[s] || { chip: "", label: s }; return `<span class="chip ${d.chip}">${d.label}</span>`; };
 
@@ -161,7 +161,7 @@ async function load() {
 
 function renderTop() {
   const f = summary.forms, st = summary.settings || {}, sent = summary.sent_today || {};
-  const tiles = [["ready", "ok", f.READY_TO_SUBMIT, "Ready to send"], ["needs", "warn", f.NEEDS_USER_INPUT, "Need your answers"],
+  const tiles = [["ready", "ok", f.READY_TO_SUBMIT, "Verified, ready to submit"], ["needs", "warn", f.NEEDS_USER_INPUT, "Need your answers"],
     ["login", "info", f.NEEDS_LOGIN, "Need a sign-in"], ["manual", "", f.MANUAL_APPLY, "Apply yourself"],
     ["sent", "ok", (sent.forms || 0) + (sent.email || 0), "Sent today"], ["sent", "", (f.SUBMITTED || 0) + (f.SENT_UNCONFIRMED || 0), "Sent in total"]];
   $("#stats").innerHTML = tiles.map(([g, c, n, l]) => `<button class="stat ${c}" data-g="${g}"><div class="n">${n || 0}</div><div class="l">${l}</div></button>`).join("");
@@ -212,12 +212,13 @@ function banner(it) {
   switch (it.state) {
     case "READY_TO_SUBMIT": return isMail(it)
       ? `<div class="banner ok">Ready. This job takes applications by email: your CV and the cover letter below go to <b>${esc(h)}</b>.</div>`
-      : `<div class="banner ok">Ready. Every required question is answered and your tailored CV is attached.</div>`;
+      : `<div class="banner ok">Verified ready. Every required field has a value, your tailored CV is attached, and the form shows no errors.</div>`;
     case "NEEDS_USER_INPUT": return `<div class="banner warn">Answer the questions marked <b>needs you</b>, then press Submit.</div>`;
     case "NEEDS_LOGIN": return `<div class="banner info"><b>${esc(h)}</b> wants you signed in. Press <b>Sign in to sites</b> once (Continue with Google works); the next run fills this form. Or apply yourself with the tailored CV.</div>`;
     case "MANUAL_APPLY": return `<div class="banner plain">No form the agent can fill. Open the application and use your tailored CV.</div>`;
     case "SENT_UNCONFIRMED": return `<div class="banner warn">Submit was pressed but no thank-you page appeared. Check the screenshot; it won't be sent again.</div>`;
-    case "SUBMITTED": return `<div class="banner ok">Sent ${ago(it.submitted_at)}${it.error ? ": " + esc(it.error) : ""}.</div>`;
+    case "SUBMITTED": return `<div class="banner ok">Sent ${ago(it.submitted_at)}${it.error ? ": " + esc(it.error) : ""}.
+      ${it.receipt ? `<div class="note" style="margin-top:6px">Receipt: ${it.receipt.confirmation ? "“" + esc(it.receipt.confirmation.slice(0, 200)) + "”" : "no confirmation text"} · <a href="${esc(it.receipt.url)}" target="_blank" rel="noopener">final page</a></div>` : ""}</div>`;
   }
   return "";
 }
@@ -303,8 +304,8 @@ async function skip() {
 
 $("#sendall").onclick = async () => {
   const n = items.filter(i => i.state === "READY_TO_SUBMIT").length;
-  if (!n) return say("No complete applications to send.");
-  if (!confirm(`Send all ${n} ready applications now? Forms with a CAPTCHA or a consent box you haven't allowed stay here.`)) return;
+  if (!n) return say("No verified applications to submit.");
+  if (!confirm(`Submit all ${n} verified applications now? Each form is checked again before Submit; forms with a CAPTCHA or a consent box you haven't allowed stay here.`)) return;
   try { await post("/api/submit_all"); } catch (e) { return say("Error: " + e.message, 8000); }
   say("Sending… browser windows open one by one. This page updates when it's done.", 600000);
   const poll = setInterval(async () => {

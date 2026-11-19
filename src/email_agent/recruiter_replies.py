@@ -89,6 +89,13 @@ def auto_send(conn, cfg: dict, smtp_factory=None) -> dict:
     skip = set(cfg.get("skip_categories") or [])
     for row in conn.execute("SELECT * FROM recruiter_emails WHERE state = 'DRAFTED' ORDER BY received_at").fetchall():
         body = row["draft_reply"] or ""
+        own = (os.environ.get("EMAIL_ADDRESS") or "").lower()
+        replied = conn.execute("SELECT 1 FROM recruiter_emails WHERE state = 'SENT' AND id != ? AND (from_addr = ? "
+                               "OR (thread_id IS NOT NULL AND thread_id = ?)) AND substr(sent_at, 1, 10) = ?",
+                               (row["id"], row["from_addr"], row["thread_id"], today)).fetchone()
+        if row["from_addr"] == own or replied:
+            out["waiting"] += 1  # already answered this person today; you decide on a second reply
+            continue
         if row["category"] in skip or "[FILL IN" in body or budget <= 0:
             out["waiting"] += 1
             continue

@@ -116,6 +116,64 @@ def fill_field(page, f: dict, value) -> bool:
         return False
 
 
+VERIFY_JS = r"""
+(consentLabels) => {
+  const clean = t => (t || '').replace(/\s+/g, ' ').trim();
+  const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+  const problems = [];
+  const skip = new Set(consentLabels || []);
+  const root = document.querySelector('form') || document;
+  const seenGroups = new Set();
+  for (const el of root.querySelectorAll('input, textarea, select')) {
+    const t = (el.type || el.tagName).toLowerCase();
+    if (['hidden', 'submit', 'button', 'reset', 'image', 'search'].includes(t) || el.disabled) continue;
+    if (t !== 'file' && !vis(el)) continue;
+    const req = el.required || el.getAttribute('aria-required') === 'true';
+    const tag = el.getAttribute('data-jsa') || el.name || el.id || t;
+    if (skip.has(tag.split(':')[0])) continue;
+    if (t === 'file') {
+      const isCv = /resume|\bcv\b|curriculum/i.test(el.name + ' ' + el.id + ' ' + (el.getAttribute('aria-label') || ''))
+                   || (el.closest('div,fieldset,label') && /resume|\bcv\b|curriculum/i.test(el.closest('div,fieldset,label').innerText || ''));
+      const f = el.files && el.files[0];
+      if ((req || isCv) && !f) problems.push('no file attached: ' + tag);
+      if (f && isCv && !/\.(docx|pdf|doc)$/i.test(f.name)) problems.push('CV is not a .docx/.pdf: ' + f.name);
+      continue;
+    }
+    if (!req) continue;
+    if (t === 'radio' || t === 'checkbox') {
+      const key = t + ':' + el.name;
+      if (el.name && seenGroups.has(key)) continue;
+      seenGroups.add(key);
+      const group = el.name ? root.querySelectorAll(`input[name="${CSS.escape(el.name)}"]`) : [el];
+      if (![...group].some(x => x.checked)) problems.push('unanswered: ' + tag);
+      continue;
+    }
+    if (!clean(el.value)) problems.push('empty: ' + tag);
+  }
+  const errSel = '[aria-invalid="true"], .error, .errors, .field-error, .invalid-feedback, .error-message, .form-error, [role="alert"], [class*="error" i]';
+  for (const el of document.querySelectorAll(errSel)) {
+    if (!vis(el)) continue;
+    const txt = clean(el.innerText || el.getAttribute('aria-label') || '');
+    if (el.matches('[aria-invalid="true"]') || (txt && txt.length < 300 && /required|invalid|please|must|error|can.?t be blank|missing/i.test(txt)))
+      problems.push('error shown: ' + (txt || el.getAttribute('data-jsa') || el.name || 'field').slice(0, 120));
+  }
+  return problems;
+}
+"""
+
+
+def verify(page, consent_ids: tuple[str, ...] = ()) -> list[str]:
+    """Problems that would stop a real submission: empty required fields, no CV attached,
+    or visible validation errors. An empty list means the form is verified ready.
+    consent_ids: data-jsa ids of consent boxes deliberately left for you (not counted)."""
+    try:
+        problems = page.evaluate(VERIFY_JS, list(consent_ids))
+    except Exception as exc:
+        return [f"could not check the form: {exc}"]
+    return problems
+
+
 SUBMIT_TEXT = re.compile(r"^\s*(submit|send|apply)( application| my application| now)?\s*$", re.I)
 CAPTCHA = "iframe[src*='hcaptcha'], iframe[src*='recaptcha'], iframe[src*='turnstile'], .g-recaptcha, .h-captcha"
 

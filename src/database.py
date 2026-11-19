@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -68,7 +68,17 @@ CREATE TABLE IF NOT EXISTS staged_forms (
     state          TEXT NOT NULL DEFAULT 'STAGING',
     error          TEXT,
     created_at     TEXT NOT NULL,
-    submitted_at   TEXT
+    submitted_at   TEXT,
+    receipt_json   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS portal_credentials (
+    host        TEXT PRIMARY KEY,
+    email       TEXT NOT NULL,
+    secret      TEXT NOT NULL,
+    verified    INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL,
+    note        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS screenshots (
@@ -131,6 +141,8 @@ def init_db(db_path: Path) -> None:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(staged_forms)")}
         if "form_url" not in cols:  # upgrade a database made by an earlier step
             conn.execute("ALTER TABLE staged_forms ADD COLUMN form_url TEXT")
+        if "receipt_json" not in cols:
+            conn.execute("ALTER TABLE staged_forms ADD COLUMN receipt_json TEXT")
         conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
 
 

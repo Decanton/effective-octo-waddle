@@ -426,3 +426,64 @@ def test_salary_answers():
     assert e.answer(Question("Expected hourly rate", "text"), abroad).value == "USD 20 per hour"
     assert e.answer(Question("Salary expectation in KES per month", "text"), ke).value == "KES 103,000 per month"
     assert e.answer(Question("Salary expectations", "select", ["$0-1,000", "$1,001-2,000", "$2,001-3,000"]), abroad).value == "$2,001-3,000"
+
+
+@pytest.mark.skipif(not _browser_ok(), reason="Playwright browser not installed")
+def test_closed_jobs_are_skipped_not_staged(tmp_path, monkeypatch):
+    from src.automation import form_stager
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    page = tmp_path / "closed.html"
+    page.write_text("<h1>Data Engineer</h1><p>This job is no longer accepting applications.</p>")
+    with db.session(ws.db_path) as c:
+        db.upsert_job(c, {"url": page.as_uri(), "source": "lever:x", "title": "Data Engineer", "company": "Acme",
+                          "description": "Python", "status": "QUALIFIED", "age_hours": 2, "priority_score": 0.9})
+    monkeypatch.setattr(form_stager, "application_url", lambda job: page.as_uri())
+    assert form_stager.run(ws, limit=1) == {"SKIPPED": 1}
+
+
+def test_same_email_application_is_never_sent_twice_from_two_listings(tmp_path, monkeypatch):
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    with db.session(ws.db_path) as c:
+        a = db.upsert_job(c, {"url": "u1", "source": "x", "title": "Data Analyst", "status": "SUBMITTED", "age_hours": 1})
+        b = db.upsert_job(c, {"url": "u2", "source": "y", "title": "data analyst", "status": "READY_TO_SUBMIT", "age_hours": 1})
+        c.execute("INSERT INTO staged_forms(job_id, form_url, state, submitted_at, created_at) VALUES (?,?,?,?,?)",
+                  (a, "mailto:hr@twiga.com", "SUBMITTED", db.now_iso(), db.now_iso()))
+        cur = c.execute("INSERT INTO staged_forms(job_id, form_url, answers_json, state, created_at) VALUES (?,?,?,?,?)",
+                        (b, "mailto:hr@twiga.com", json.dumps([{"label": "To", "value": "hr@twiga.com"}, {"label": "Subject", "value": "s"},
+                                                              {"label": "Cover letter", "value": "Dear Hiring Manager"}]), "READY_TO_SUBMIT", db.now_iso()))
+    res = email_apply.send(ws, cur.lastrowid, smtp_factory=lambda: (_ for _ in ()).throw(AssertionError("must not send")))
+    assert not res["ok"] and "already" in res["error"]
+
+
+def test_only_one_auto_reply_per_sender_per_day(tmp_path, monkeypatch):
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    monkeypatch.setattr(recruiter_replies.llm_client, "available", lambda: False)
+    monkeypatch.setenv("EMAIL_ADDRESS", "me@example.com")
+    monkeypatch.setenv("EMAIL_APP_PASSWORD", "pw")
+    base = {"from_name": "Jane", "text": "x", "received_at": "2026-11-19T08:00:00+00:00", "from_addr": "jane@acme.com", "category": "other"}
+    sent = []
+
+    class FakeSMTP:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def login(self, u, p): pass
+        def send_message(self, m): sent.append(m["To"])
+    with db.session(ws.db_path) as c:
+        recruiter_replies.save(c, [{**base, "message_id": "<1>", "subject": "Role A"}, {**base, "message_id": "<2>", "subject": "Role B"},
+                                   {**base, "message_id": "<3>", "subject": "Hi", "from_addr": "me@example.com"}], PROFILE)
+        recruiter_replies.auto_send(c, {"auto_send": True, "max_per_day": 10, "skip_categories": []}, FakeSMTP)
+    assert sent == ["jane@acme.com"]
+
+
+def test_daily_run_refuses_to_start_twice(tmp_path, monkeypatch):
+    import run_sprint
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    monkeypatch.setattr(run_sprint, "setup", lambda: ws)
+    db.init_db(ws.db_path)
+    (ws.data / "sprint.lock").write_text("123")
+    assert run_sprint.main(["--no-review"]) == 1
+    assert (ws.data / "sprint.lock").exists()  # the other run's lock is left alone
