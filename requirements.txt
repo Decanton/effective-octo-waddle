@@ -1,4 +1,8 @@
-# Step 1 (base setup and CV tailoring). Later steps add discovery, browser and web UI packages.
+# Step 1: profile, CV template and tailoring
 python-docx==1.1.2
 python-dotenv==1.0.1
 PyYAML==6.0.2
+# Step 2: job discovery
+python-jobspy==1.4.1
+requests>=2.31
+beautifulsoup4>=4.12

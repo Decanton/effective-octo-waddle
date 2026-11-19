@@ -5,8 +5,10 @@
   python run_sprint.py --check      check your profile and settings
   python run_sprint.py --sample-cvs build one sample CV per track to review the layout
   python run_sprint.py --cv-for FILE  build a tailored CV for a job description saved in FILE
+  python run_sprint.py --discover   find jobs from the last 24 hours and rank them
+  python run_sprint.py --mark-applied NAME  mark an AI platform (e.g. AfterQuery) as applied
 
-Coming in later steps: --stage-only (step 2/3), --login-setup (step 3), --email-only (step 4).
+Coming in later steps: --stage-only (step 3), --login-setup (step 3), --email-only (step 4).
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ from src import database as db  # noqa: E402
 from src.workspace import ensure_workspace  # noqa: E402
 
 PLANNED = {
-    "stage_only": "Job discovery and form staging arrive in steps 2 and 3 of the plan.",
+    "stage_only": "Form staging arrives in step 3 of the plan. Use --discover to find and rank jobs.",
     "login_setup": "Browser login setup arrives in step 3 of the plan.",
     "email_only": "Inbox scanning and recruiter replies arrive in step 4 of the plan.",
 }
@@ -106,12 +108,24 @@ def cv_for(ws, log, job_file: Path) -> Path:
     return path
 
 
+def discover(ws, log) -> int:
+    from src.discovery import pipeline
+    with db.session(ws.db_path) as conn:
+        run_id = db.start_run(conn, "discover")
+    result = pipeline.run(ws, run_id)
+    with db.session(ws.db_path) as conn:
+        db.finish_run(conn, run_id, jobs_found=result["found"], jobs_kept=result["kept"])
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Local job application and recruiter email agent")
     ap.add_argument("--setup", action="store_true")
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--sample-cvs", action="store_true")
     ap.add_argument("--cv-for", type=Path, metavar="FILE")
+    ap.add_argument("--discover", action="store_true")
+    ap.add_argument("--mark-applied", metavar="PLATFORM")
     ap.add_argument("--stage-only", action="store_true")
     ap.add_argument("--login-setup", action="store_true")
     ap.add_argument("--email-only", action="store_true")
@@ -136,16 +150,20 @@ def main(argv=None) -> int:
     if args.cv_for:
         cv_for(ws, log, args.cv_for)
         return 0
+    if args.mark_applied:
+        from src.discovery.ai_platforms import mark_platform
+        with db.session(ws.db_path) as conn:
+            mark_platform(conn, args.mark_applied, "APPLIED")
+        log.info("Marked %s as applied.", args.mark_applied)
+        return 0
+    if args.discover:
+        return discover(ws, log)
 
-    # Daily sprint. For now (step 1) it prepares everything and builds sample CVs.
-    with db.session(ws.db_path) as conn:
-        run_id = db.start_run(conn, "sprint")
-    problems = check(log)
-    paths = sample_cvs(ws, log) if not problems else []
-    with db.session(ws.db_path) as conn:
-        db.finish_run(conn, run_id, notes=f"step1: {len(paths)} sample CVs, {problems} profile problems")
-    log.info("Done. Open %s to see the sample CVs.", ws.tailored_cvs / "_samples")
-    return 1 if problems else 0
+    # Daily sprint. Steps 1-2 so far: check the profile, then find and rank jobs.
+    if check(log):
+        log.error("Fix the profile problems above, then run again.")
+        return 1
+    return discover(ws, log)
 
 
 if __name__ == "__main__":

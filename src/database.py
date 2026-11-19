@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -76,6 +76,15 @@ CREATE TABLE IF NOT EXISTS screenshots (
     path           TEXT NOT NULL,
     kind           TEXT NOT NULL DEFAULT 'before_submit',
     created_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS platforms (
+    name        TEXT PRIMARY KEY,
+    url         TEXT NOT NULL,
+    track       TEXT,
+    status      TEXT NOT NULL DEFAULT 'NOT_APPLIED',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS recruiter_emails (

@@ -1,0 +1,32 @@
+# AI training and evaluation platforms, and companies whose public job boards
+# are checked every run.
+#
+# kind: greenhouse | lever | ashby  -> postings are fetched and must pass the
+#                                       24-hour rule like any other job.
+# kind: evergreen                   -> no dated postings; you apply once. These
+#                                       are tracked so the review page can remind
+#                                       you until you mark them done.
+#
+# A board name that returns "not found" is reported in the log so you can fix or
+# remove it.
+
+ats_boards:
+  - {name: "Anthropic",  kind: greenhouse, board: anthropic}
+  - {name: "Scale AI",   kind: greenhouse, board: scaleai}
+  - {name: "Labelbox (Alignerr)", kind: greenhouse, board: labelbox}
+  - {name: "Andela",     kind: greenhouse, board: andela}
+  - {name: "Mistral AI", kind: lever,      board: mistral}
+  - {name: "OpenAI",     kind: ashby,      board: openai}
+  - {name: "Cohere",     kind: ashby,      board: cohere}
+  - {name: "Mercor",     kind: ashby,      board: mercor}
+
+evergreen_platforms:
+  - {name: "AfterQuery",     url: "https://experts.afterquery.com/apply", track: ai_data}
+  - {name: "Outlier",        url: "https://outlier.ai/experts",           track: ai_data}
+  - {name: "Alignerr",       url: "https://www.alignerr.com/",            track: ai_data}
+  - {name: "DataAnnotation", url: "https://www.dataannotation.tech/",     track: ai_data}
+  - {name: "Mercor",         url: "https://work.mercor.com/",             track: ai_data}
+  - {name: "Snorkel Experts", url: "https://snorkel.ai/",                 track: ai_data}
+
+# Keep remote postings, and onsite ones in these places.
+locations_ok: [remote, anywhere, worldwide, kenya, nairobi, africa, emea]
