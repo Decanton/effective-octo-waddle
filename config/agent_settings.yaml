@@ -98,3 +98,10 @@ update:
   run_tests: true
   branch: main
   repo: https://github.com/Decanton/effective-octo-waddle.git
+
+llm:
+  # Which AI writes cover letters, written answers and recruiter replies.
+  # cloud:      Gemini, then Groq, then Ollama (free keys in .env). See docs/AI_DATA.md for what they see.
+  # local_only: only Ollama on this laptop (install from ollama.com, set OLLAMA_MODEL in .env). Nothing leaves the laptop.
+  # off:        no AI; template letters, and written questions wait for you.
+  mode: cloud

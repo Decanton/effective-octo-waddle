@@ -9,7 +9,11 @@ So the page never goes offline and nothing in progress is cut off.
 from __future__ import annotations
 
 import http.client
+import json
 import logging
+import os
+import secrets
+import socket
 import subprocess
 import sys
 import threading
@@ -19,21 +23,35 @@ from pathlib import Path
 
 log = logging.getLogger("jobsprint")
 ROOT = Path(__file__).resolve().parents[2]
-PORTS = (8101, 8102)
+PORTS = None  # private ports are picked fresh each time, so nothing else can be in the way
+
+
+def free_port() -> int:
+    with socket.socket() as so:
+        so.bind(("127.0.0.1", 0))
+        return so.getsockname()[1]
 HOP = {"connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade", "proxy-connection", "content-length"}
 
 
 class Backend:
     def __init__(self, port: int, cmd: list[str] | None = None):
         self.port, self.active, self.lock = port, 0, threading.Lock()
+        # A secret only this child knows: proves the app answering on the port is the one we started.
+        self.token = secrets.token_hex(12) if cmd is None else None
         self.cmd = cmd or [sys.executable, str(ROOT / "run_sprint.py"), "--review-backend", "--port", str(port)]
-        self.proc = subprocess.Popen(self.cmd, cwd=str(ROOT), creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        env = {**os.environ, "JOBSPRINT_BACKEND_TOKEN": self.token or ""}
+        self.proc = subprocess.Popen(self.cmd, cwd=str(ROOT), env=env, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     def healthy(self) -> bool:
+        if self.proc.poll() is not None:
+            return False
         try:
             c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=2)
             c.request("GET", "/api/version")
-            return c.getresponse().status == 200
+            r = c.getresponse()
+            if r.status != 200:
+                return False
+            return self.token is None or json.loads(r.read() or b"{}").get("token") == self.token
         except Exception:
             return False
 
@@ -62,15 +80,16 @@ class Backend:
 
 
 class FrontDoor:
-    def __init__(self, ws, port: int = 8000, backend_factory=Backend, ports: tuple[int, int] = PORTS):
-        self.ws, self.port, self.factory, self.ports = ws, port, backend_factory, ports
+    def __init__(self, ws, port: int = 8000, backend_factory=Backend, ports: tuple[int, int] | None = PORTS,
+                 probation: float = 20.0):
+        self.ws, self.port, self.factory, self.ports, self.probation = ws, port, backend_factory, ports, probation
         self.current: Backend | None = None
         self.switch_lock = threading.Lock()
         self.last_switch: dict = {}
 
     def start_backend(self) -> Backend:
         used = self.current.port if self.current else None
-        port = next(p for p in self.ports if p != used)
+        port = next(p for p in self.ports if p != used) if self.ports else free_port()
         b = self.factory(port)
         if not b.wait_ready():
             b.stop(grace=0)
@@ -88,9 +107,28 @@ class FrontDoor:
                 return False
             old, self.current = self.current, new
             self.last_switch = {"ok": True, "at": time.time(), "port": new.port}
-            if old:
-                threading.Thread(target=old.stop, daemon=True).start()
+            threading.Thread(target=self._probation, args=(old, new), daemon=True).start()
             return True
+
+    def _probation(self, old, new) -> None:
+        """Keep the old version warm for a while; if the new one stops answering, switch back."""
+        end = time.monotonic() + self.probation
+        while time.monotonic() < end:
+            if not new.healthy():
+                time.sleep(1)
+                if new.healthy():
+                    continue
+                if old and old.healthy():
+                    self.current = old
+                    self.last_switch = {"ok": False, "rolled_back": True, "at": time.time(),
+                                        "error": "the new version stopped answering, so the previous one is back"}
+                    log.warning("New review app failed after the switch; rolled back.")
+                    new.stop(grace=0)
+                    return
+                break
+            time.sleep(1)
+        if old:
+            old.stop()
 
     def update_loop(self, minutes: float) -> None:
         time.sleep(30)

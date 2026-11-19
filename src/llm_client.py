@@ -125,10 +125,29 @@ def _ollama(prompt: str, system: str, timeout: float) -> str:
 PROVIDERS = (("gemini", _gemini), ("groq", _groq), ("ollama", _ollama))
 
 
+def mode() -> str:
+    """'cloud' (Gemini, then Groq, then Ollama), 'local_only' (Ollama on this laptop only) or 'off'."""
+    try:
+        from .settings import load_settings
+        m = str((load_settings().get("llm") or {}).get("mode", "cloud")).lower()
+    except Exception:
+        m = "cloud"
+    return m if m in ("cloud", "local_only", "off") else "cloud"
+
+
+def providers():
+    m = mode()
+    if m == "off":
+        return ()
+    return tuple(p for p in PROVIDERS if p[0] == "ollama") if m == "local_only" else PROVIDERS
+
+
 def complete(prompt: str, system: str = "You are a careful assistant.", timeout: float = 60, retries: int = 2) -> str:
-    """Try each free provider in order, with a short backoff on rate limits. Raises LLMUnavailable."""
+    """Try each allowed provider in order, with a short backoff on rate limits. Raises LLMUnavailable."""
     errors = []
-    for name, fn in PROVIDERS:
+    if not providers():
+        raise LLMUnavailable("AI is switched off (llm.mode: off)")
+    for name, fn in providers():
         for attempt in range(retries + 1):
             try:
                 return fn(prompt, system, timeout)
@@ -148,5 +167,8 @@ def complete(prompt: str, system: str = "You are a careful assistant.", timeout:
     raise LLMUnavailable("; ".join(errors))
 
 
+KEYS = {"gemini": "GEMINI_API_KEY", "groq": "GROQ_API_KEY", "ollama": "OLLAMA_MODEL"}
+
+
 def available() -> bool:
-    return any(os.environ.get(k) for k in ("GEMINI_API_KEY", "GROQ_API_KEY", "OLLAMA_MODEL"))
+    return any(os.environ.get(KEYS[name]) for name, _ in providers())

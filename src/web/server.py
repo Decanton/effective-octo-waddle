@@ -30,7 +30,8 @@ def create_app(ws) -> FastAPI:
 
     @app.get("/api/version")
     def version():
-        return {"commit": _commit, "started_at": _started}
+        import os
+        return {"commit": _commit, "started_at": _started, "token": os.environ.get("JOBSPRINT_BACKEND_TOKEN") or None}
 
     @app.get("/", response_class=HTMLResponse)
     def index():

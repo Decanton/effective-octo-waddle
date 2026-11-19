@@ -117,3 +117,17 @@ def test_stage_order_puts_email_posts_and_ats_first():
             {"url": "https://boards.greenhouse.io/acme/jobs/1", "description": ""},
             {"url": "https://jobwebkenya.com/j", "description": "Send your CV and cover letter to hr@acme.co.ke"}]
     assert form_stager.application_url(jobs[1]) and not form_stager.application_url(jobs[0])
+
+
+def test_llm_local_only_and_off(monkeypatch):
+    from src import llm_client
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    monkeypatch.setattr(llm_client, "mode", lambda: "local_only")
+    assert [n for n, _ in llm_client.providers()] == ["ollama"] and not llm_client.available()
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.1:8b")
+    assert llm_client.available()
+    monkeypatch.setattr(llm_client, "mode", lambda: "off")
+    assert not llm_client.available()
+    with pytest.raises(llm_client.LLMUnavailable):
+        llm_client.complete("hi")

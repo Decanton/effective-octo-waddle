@@ -47,7 +47,7 @@ Run these from this folder, after the first run, with `.venv\Scripts\python.exe 
 ## Applying: what happens and what never happens
 - For each top job the agent builds a tailored CV, opens the real application form (Greenhouse, Lever or Ashby, including ones linked from remote job boards), fills what it can from your profile, uploads the CV and takes a screenshot. Staging never presses Submit. Sending happens afterwards, under the rules in Automatic sending.
 - Questions your profile can't answer are flagged **needs you**. Demographic questions get "decline to self-identify" when offered. Consent and privacy boxes are ticked only if you allow it in `config/agent_settings.yaml`. Otherwise you tick them on the review page.
-- Written questions ("Why do you want to work here?") get a short AI draft from Gemini or Groq using only your profile. It is marked **AI draft** for you to read and edit.
+- Written questions ("Why do you want to work here?") get a short AI draft from Gemini or Groq using only your profile. It is marked **AI draft** for you to read and edit. What each AI service sees, and how to keep everything on the laptop with Ollama (`llm.mode: local_only`), is in [docs/AI_DATA.md](docs/AI_DATA.md).
 - On the review page, **Submit** reopens the form, fills it again with your edits, and presses Submit in a visible browser so you can solve any CAPTCHA. **Skip** drops the job. Jobs with no supported form show **Open application** and your tailored CV to apply yourself.
 
 ## Automatic sending

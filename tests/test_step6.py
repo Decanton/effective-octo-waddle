@@ -190,7 +190,7 @@ def test_front_door_swaps_versions_without_dropping_requests(tmp_path):
         with socket.socket() as so:
             so.bind(("127.0.0.1", 0))
             return so.getsockname()[1]
-    door = frontdoor.FrontDoor(None, port=0, ports=(free_port(), free_port()),
+    door = frontdoor.FrontDoor(None, port=0, probation=1.0,
                                backend_factory=lambda port: frontdoor.Backend(port, [sys.executable, str(script), str(port), next(tags)]))
     door.current = door.start_backend()
     from http.server import ThreadingHTTPServer
@@ -214,7 +214,7 @@ def test_front_door_swaps_versions_without_dropping_requests(tmp_path):
         assert get("/api/x")[1]["commit"] == "v2"  # new requests go to the new version at once
         t.join()
         assert slow["r"] == (200, {"commit": "v1", "path": "/slow"})  # the request in flight finished on the old one
-        for _ in range(50):
+        for _ in range(60):
             if old.proc.poll() is not None:
                 break
             time.sleep(0.2)
@@ -249,3 +249,39 @@ def test_never_replies_to_mailers(tmp_path):
         out = rr.auto_send(c, {"auto_send": True, "max_per_day": 10}, smtp_factory=S)
         assert out["sent"] == 0 and not sent
         assert c.execute("SELECT state FROM recruiter_emails").fetchone()[0] == "DISMISSED"
+
+
+def test_front_door_rolls_back_when_new_version_dies(tmp_path):
+    from src.web import frontdoor
+    script = tmp_path / "backend.py"
+    script.write_text(BACKEND)
+    tags = iter(["v1", "v2"])
+    door = frontdoor.FrontDoor(None, port=0, probation=6.0,
+                               backend_factory=lambda port: frontdoor.Backend(port, [sys.executable, str(script), str(port), next(tags)]))
+    door.current = door.start_backend()
+    old = door.current
+    try:
+        assert door.swap()
+        new = door.current
+        new.proc.kill()  # the new version crashes right after taking over
+        for _ in range(40):
+            if door.current is old:
+                break
+            time.sleep(0.25)
+        assert door.current is old and door.last_switch.get("rolled_back")
+    finally:
+        door.current.stop(grace=0)
+
+
+def test_backend_token_must_match(tmp_path):
+    from src.web import frontdoor
+    script = tmp_path / "backend.py"
+    script.write_text(BACKEND)
+    port = frontdoor.free_port()
+    b = frontdoor.Backend(port, [sys.executable, str(script), str(port), "x"])
+    try:
+        assert b.wait_ready(10)
+        b.token = "expected-secret"  # someone else's app on that port would not know it
+        assert not b.healthy()
+    finally:
+        b.stop(grace=0)

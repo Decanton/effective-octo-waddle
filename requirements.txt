@@ -4,8 +4,8 @@ python-dotenv==1.0.1
 PyYAML==6.0.2
 # Step 2: job discovery
 python-jobspy==1.4.1
-requests>=2.31
-beautifulsoup4>=4.12
+requests==2.34.2
+beautifulsoup4==4.15.0
 # Step 3: form filling and the review page
 playwright==1.65.2
 fastapi==0.165.0
