@@ -17,6 +17,15 @@ ats_boards:
   - {name: "OpenAI",     kind: ashby,      board: openai}
   - {name: "Cohere",     kind: ashby,      board: cohere}
   - {name: "Mercor",     kind: ashby,      board: mercor}
+  # Remote-first companies that often hire worldwide or across EMEA.
+  - {name: "Canonical",  kind: greenhouse, board: canonical}
+  - {name: "GitLab",     kind: greenhouse, board: gitlab}
+  - {name: "Wikimedia",  kind: greenhouse, board: wikimedia}
+  - {name: "Mozilla",    kind: greenhouse, board: mozilla}
+  - {name: "Remote.com", kind: greenhouse, board: remotecom}
+  - {name: "Turing",     kind: greenhouse, board: turing}
+  - {name: "Deel",       kind: ashby,      board: deel}
+  - {name: "Zapier",     kind: ashby,      board: zapier}
 
 evergreen_platforms:
   - {name: "AfterQuery",     url: "https://experts.afterquery.com/apply", track: ai_data}

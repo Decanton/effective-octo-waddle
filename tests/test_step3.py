@@ -130,3 +130,14 @@ def test_follows_listing_apply_link_to_form(tmp_path, monkeypatch):
         page = ctx.new_page()
         url = form_stager._follow_to_ats(page, {"url": listing})
     assert url and url.endswith("apply_form.html")
+
+
+@pytest.mark.skipif(not _browser_ok(), reason="Playwright browser not installed")
+def test_skips_anchor_jumps_and_auto_apply_then_clicks_button(tmp_path, monkeypatch):
+    from src.automation import form_stager
+    from src.automation.browser_manager import browser
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    with browser(ws) as ctx:
+        url = form_stager._follow_to_ats(ctx.new_page(), {"url": (FIX / "listing2.html").as_uri()})
+    assert url and url.endswith("apply_form.html")

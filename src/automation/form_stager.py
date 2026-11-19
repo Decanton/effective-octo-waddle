@@ -45,14 +45,23 @@ def application_url(job: dict) -> str | None:
 
 
 APPLY_TEXT = re.compile(r"\bapply\b|application", re.I)
+SKIP_TEXT = re.compile(r"auto-?apply|copilot|with ai|alert|newsletter|subscribe|similar jobs", re.I)
+BLOCKED_TITLE = re.compile(r"just a moment|attention required|access denied|verify you are human", re.I)
 
 
 def _has_form(page) -> bool:
-    """True when the page shows a real application form (not just a search box)."""
+    """True when the page shows a real application form (not a search or newsletter box)."""
     try:
-        inputs = page.locator("form input:visible, form textarea:visible, form select:visible").count()
-        key = page.locator("input[type=email], input[type=file], input[name*=email i], input[id*=email i]").count()
+        inputs = page.locator("input:visible, textarea:visible, select:visible").count()
+        key = page.locator("input[type=email]:visible, input[type=file], input[name*=email i]:visible, input[id*=email i]:visible").count()
         return inputs >= 3 and key > 0
+    except Exception:
+        return False
+
+
+def _blocked(page) -> bool:
+    try:
+        return bool(BLOCKED_TITLE.search(page.title() or ""))
     except Exception:
         return False
 
@@ -67,56 +76,89 @@ def _ats_url(href: str) -> str:
     return application_url(fake) or href
 
 
-def _candidate_links(page) -> list[str]:
-    ats, apply = [], []
-    for a in page.locator("a[href]").all()[:500]:
+def _candidates(page):
+    """Apply links/buttons in order of promise: ATS links, other-site links, same-site links, buttons."""
+    here = urlparse(page.url)
+    ats, external, internal, buttons = [], [], [], []
+    for el in page.locator("a, button").all()[:600]:
         try:
-            href = a.get_attribute("href") or ""
-            text = (a.inner_text(timeout=500) or "") + " " + (a.get_attribute("aria-label") or "")
+            if not el.is_visible():
+                continue
+            text = ((el.inner_text(timeout=500) or "") + " " + (el.get_attribute("aria-label") or "")).strip()
+            href = el.get_attribute("href") or ""
         except Exception:
             continue
-        if not href or href.startswith(("#", "mailto:", "javascript:")):
+        if SKIP_TEXT.search(text):
             continue
-        href = page.evaluate("h => new URL(h, location.href).href", href)
-        if any(h in href for h in ATS_HOSTS):
-            ats.append(href)
+        if href and not href.startswith(("mailto:", "javascript:")):
+            full = page.evaluate("h => new URL(h, location.href).href", href)
+            u = urlparse(full)
+            if any(h in u.netloc for h in ATS_HOSTS):
+                ats.append(("link", full))
+            elif not APPLY_TEXT.search(text):
+                continue
+            elif u.netloc == here.netloc and u.path == here.path:
+                continue  # "#apply" jumps within the same page
+            elif u.netloc != here.netloc:
+                external.append(("link", full))
+            else:
+                internal.append(("link", full))
         elif APPLY_TEXT.search(text):
-            apply.append(href)
+            buttons.append(("click", el))
     seen, out = set(), []
-    for h in ats + apply:
-        if h not in seen:
-            seen.add(h)
-            out.append(h)
-    return out[:4]
+    for kind, v in ats + external + internal + buttons:
+        key = v if kind == "link" else id(v)
+        if key not in seen:
+            seen.add(key)
+            out.append((kind, v))
+    return out[:5]
+
+
+def _settle(page):
+    try:
+        page.wait_for_load_state("networkidle", timeout=8000)
+    except Exception:
+        pass
+    page.wait_for_timeout(1500)
 
 
 def _follow_to_ats(page, job: dict, depth: int = 2) -> str | None:
     """Follow a job-board listing through its Apply link to the company's real form."""
-    start = job.get("apply_url") or job["url"]
     try:
-        page.goto(start, wait_until="domcontentloaded")
-        page.wait_for_timeout(2000)
+        page.goto(job.get("apply_url") or job["url"], wait_until="domcontentloaded")
+        _settle(page)
     except Exception:
         return None
     for _ in range(depth + 1):
-        here = page.url
-        if any(h in urlparse(here).netloc for h in ATS_HOSTS):
-            target = _ats_url(here)
-            return target
-        if _has_form(page):
-            return here
-        links = _candidate_links(page)
-        if not links:
+        if _blocked(page):
             return None
+        if any(h in urlparse(page.url).netloc for h in ATS_HOSTS):
+            return _ats_url(page.url)
+        if _has_form(page):
+            return page.url
         moved = False
-        for href in links:
+        for kind, v in _candidates(page):
+            before = page.url
             try:
-                page.goto(href, wait_until="domcontentloaded")
-                page.wait_for_timeout(2000)
-                moved = True
-                break
+                if kind == "link":
+                    page.goto(v, wait_until="domcontentloaded")
+                else:
+                    try:
+                        with page.context.expect_page(timeout=5000) as new:
+                            v.click()
+                        popup = new.value
+                        popup.wait_for_load_state("domcontentloaded")
+                        page.goto(popup.url, wait_until="domcontentloaded")
+                        popup.close()
+                    except Exception:
+                        if page.url == before:
+                            v.click()
+                _settle(page)
             except Exception:
                 continue
+            if page.url != before:
+                moved = True
+                break
         if not moved:
             return None
     return page.url if _has_form(page) else None
@@ -188,8 +230,10 @@ def run(ws, limit: int | None = None) -> dict:
         log.warning("No LLM key found in .env, so written questions will be left for you.")
     counts = {}
     with db.session(ws.db_path) as conn:
-        jobs = [dict(r) for r in conn.execute(
-            "SELECT * FROM jobs WHERE status = 'QUALIFIED' ORDER BY priority_score DESC LIMIT ?", (limit,))]
+        pool = [dict(r) for r in conn.execute(
+            "SELECT * FROM jobs WHERE status = 'QUALIFIED' ORDER BY priority_score DESC LIMIT ?", (limit * 4,))]
+    # Jobs that point straight at a Greenhouse, Lever or Ashby form go first: those fill reliably.
+    jobs = sorted(pool, key=lambda j: application_url(j) is None)[:limit]
     if not jobs:
         log.info("No qualified jobs waiting. Run --discover first.")
         return counts
