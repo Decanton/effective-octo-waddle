@@ -10,3 +10,6 @@ beautifulsoup4==4.15.0
 playwright==1.65.2
 fastapi==0.165.0
 uvicorn==0.54.0
+# Tests (run on every new version before it is installed)
+pytest>=8,<10
+httpx==0.28.1
