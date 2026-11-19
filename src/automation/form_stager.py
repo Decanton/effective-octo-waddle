@@ -47,10 +47,23 @@ def application_url(job: dict) -> str | None:
 APPLY_TEXT = re.compile(r"\bapply\b|application", re.I)
 SKIP_TEXT = re.compile(r"auto-?apply|copilot|with ai|alert|newsletter|subscribe|similar jobs", re.I)
 BLOCKED_TITLE = re.compile(r"just a moment|attention required|access denied|verify you are human", re.I)
+ACCOUNT_URL = re.compile(r"/(sign-?up|sign-?in|log-?in|register|create-account|join|auth|account)(/|\?|$)", re.I)
+
+
+def _account_page(page) -> bool:
+    """Sign-up / login pages are NOT applications, even if they ask for name and email."""
+    try:
+        if ACCOUNT_URL.search(urlparse(page.url).path + "?"):
+            return True
+        return page.locator("input[type=password]").count() > 0
+    except Exception:
+        return True
 
 
 def _has_form(page) -> bool:
-    """True when the page shows a real application form (not a search or newsletter box)."""
+    """True when the page shows a real application form (not a search, newsletter or sign-up box)."""
+    if _account_page(page):
+        return False
     try:
         inputs = page.locator("input:visible, textarea:visible, select:visible").count()
         key = page.locator("input[type=email]:visible, input[type=file], input[name*=email i]:visible, input[id*=email i]:visible").count()
@@ -185,9 +198,12 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
 
     page.goto(url, wait_until="domcontentloaded")
     page.wait_for_timeout(2500)
-    if re.search(r"/(login|signin|sign-in)\b", page.url):
-        db.set_job_status(conn, jid, "NEEDS_LOGIN", "the site asked you to sign in; run --login-setup")
-        return "NEEDS_LOGIN"
+    if _account_page(page):
+        conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
+                     (jid, cv_id, job.get("apply_url") or job["url"], "MANUAL_APPLY", db.now_iso(),
+                      "The site wants you to sign in or create an account first. Apply yourself with your tailored CV."))
+        db.set_job_status(conn, jid, "MANUAL_APPLY", "site needs an account; apply yourself")
+        return "MANUAL_APPLY"
     fields = form_fields.discover(page)
     if not fields:
         conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",

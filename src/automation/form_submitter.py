@@ -43,6 +43,8 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         page.goto(row["form_url"], wait_until="domcontentloaded")
         page.wait_for_timeout(2500)
+        if page.locator("input[type=password]").count() > 0:
+            return {"ok": False, "error": "this page asks for a password, so it is a sign-up or login page, not an application. Nothing was submitted."}
         missing = []
         for f in form_fields.discover(page):
             label_n = " ".join(f["label"].lower().split())

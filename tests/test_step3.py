@@ -141,3 +141,16 @@ def test_skips_anchor_jumps_and_auto_apply_then_clicks_button(tmp_path, monkeypa
     with browser(ws) as ctx:
         url = form_stager._follow_to_ats(ctx.new_page(), {"url": (FIX / "listing2.html").as_uri()})
     assert url and url.endswith("apply_form.html")
+
+
+@pytest.mark.skipif(not _browser_ok(), reason="Playwright browser not installed")
+def test_signup_pages_are_never_treated_as_applications(tmp_path, monkeypatch):
+    from src.automation import form_stager
+    from src.automation.browser_manager import browser
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    with browser(ws) as ctx:
+        page = ctx.new_page()
+        page.goto((FIX / "signup.html").as_uri())
+        assert form_stager._account_page(page) and not form_stager._has_form(page)
+        assert form_stager._follow_to_ats(page, {"url": (FIX / "signup.html").as_uri()}) is None
