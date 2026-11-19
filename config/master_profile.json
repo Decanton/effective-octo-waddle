@@ -839,7 +839,7 @@
     "notice_period": "1 week",
     "earliest_start_date": "Within 1 week (can start immediately)",
     "expected_hourly_rate_usd": 20,
-    "gender": null,
+    "gender": "Male",
     "how_did_you_hear": "Online job board",
     "languages": null,
     "has_drivers_license": null,
@@ -870,7 +870,7 @@
     "hispanic_or_latino": false,
     "protected_veteran": false,
     "disability": false,
-    "gender": null,
-    "_rule": "Kelly, 2026-11-19: Black (from Kenya), not a veteran, no disability. Gender not given, so the 'decline' option is used."
+    "gender": "Male",
+    "_rule": "Kelly, 2026-11-19: male, Black (from Kenya), not a veteran, no disability."
   }
 }
