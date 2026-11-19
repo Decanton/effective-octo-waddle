@@ -22,6 +22,7 @@ from ..cv_tailor.single_template_tailor import build_cv, load_profile
 from ..intelligence.answer_engine import AnswerEngine
 from . import email_apply, form_fields
 from . import human_assist_interceptor as hia
+from . import linkedin_easy_apply as lea
 
 log = logging.getLogger("jobsprint")
 
@@ -264,6 +265,45 @@ def _needs_login(conn, jid: int, cv_id: int, at_url: str) -> str:
     return "NEEDS_LOGIN"
 
 
+def _linkedin(page, conn, ws, job: dict, cv_id: int, cv_path, engine) -> tuple[str | None, str | None]:
+    """LinkedIn jobs: Easy Apply right there, or follow 'Apply' to the employer. Returns (final state, employer URL)."""
+    from ..settings import load_settings
+    cfg = load_settings().get("linkedin_easy_apply") or {}
+    if not cfg.get("enabled") or not lea.is_linkedin(job.get("url")):
+        return None, None
+    jid = job["id"]
+    if not lea.ensure_signed_in(page):
+        log.info("  not signed in to LinkedIn in Job Agent Chrome; using the public page instead")
+        return None, None
+    kind = lea.open_job(page, job)
+    log.info("  LinkedIn: %s", kind)
+    if kind in ("applied", "closed"):
+        conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
+                     (jid, cv_id, job["url"], "SKIPPED", db.now_iso(), "Already applied on LinkedIn." if kind == "applied" else "No longer accepting applications."))
+        db.set_job_status(conn, jid, "SKIPPED", "already applied on LinkedIn" if kind == "applied" else "job closed")
+        return "SKIPPED", None
+    if kind == "checkpoint":
+        return _needs_manual(conn, jid, cv_id, page.url, "captcha"), None
+    if kind == "easy":
+        if lea.sent_today(conn) >= int(cfg.get("max_per_day", 40)):
+            db.set_job_status(conn, jid, "QUALIFIED", "LinkedIn daily limit reached; tomorrow")
+            return "DEFERRED", None
+        state = lea.apply(page, conn, ws, job, cv_id, cv_path, engine)
+        return (state, None) if state != "none" else (None, None)
+    if kind == "external":
+        target = lea.external_target(page)
+        if target is not None and not lea.is_linkedin(target.url):
+            url = target.url
+            if target is not page:
+                try:
+                    target.close()
+                except Exception:
+                    pass
+            log.info("  LinkedIn's Apply leads to %s", urlparse(url).netloc)
+            return None, url
+    return None, None
+
+
 def _needs_manual(conn, jid: int, cv_id: int, at_url: str, kind: str) -> str:
     what = "a CAPTCHA" if kind == "captcha" else "a code texted to your phone"
     conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
@@ -298,6 +338,10 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
     except Exception:
         pass
     direct = application_url(job)
+    if not direct:
+        res, direct = _linkedin(page, conn, ws, job, cv_id, cv_path, engine)
+        if res:
+            return res
     if not direct:  # "send your CV to hr@..." in the job post
         found = email_apply.find_apply_email(job.get("description") or "")
         if found:

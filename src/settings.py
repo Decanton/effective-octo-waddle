@@ -20,6 +20,7 @@ DEFAULTS = {
                      "pacing": {"between_steps_seconds": [1.5, 4.0], "between_fields_seconds": [0.2, 0.6]}},
     "llm": {"mode": "cloud"},
     "follow_ups": {"enabled": True, "after_days": 7, "auto_send": True, "max_per_day": 10},
+    "linkedin_easy_apply": {"enabled": False, "max_per_day": 40},
     "browser": {"use_cdp": True, "cdp_port": 9222},
 }
 

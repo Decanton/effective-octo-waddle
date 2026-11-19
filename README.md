@@ -141,3 +141,12 @@ one and takes over once it answers; anything in progress finishes on the old one
 - Reposts of a job you already applied to are skipped; jobs not filled within 2 days of being found are dropped.
 - At most 5 forms a day go to any one site (`auto_submit.per_site_default`).
 - Keys: ↑/↓ or j/k to move, Enter to submit, Backspace to skip, / to search.
+
+## LinkedIn Easy Apply
+
+With `linkedin_easy_apply.enabled: true` (on, up to 40 a day) and LinkedIn signed in inside Job Agent Chrome
+(the agent tries "Continue with Google" once if it isn't), LinkedIn jobs are applied to right there:
+every Easy Apply step is filled from your profile, the tailored CV is uploaded, "Follow company" is unticked and
+the application is submitted, with a receipt saved. "Apply on company site" jobs are followed to the employer's form.
+If LinkedIn asks something the agent can't answer, the draft is discarded and the question shows on the review page.
+A LinkedIn security check is never solved: that job is skipped. LinkedIn may restrict accounts it thinks are automated.

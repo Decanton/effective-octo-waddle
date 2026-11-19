@@ -117,3 +117,11 @@ follow_ups:
   after_days: 7
   auto_send: true
   max_per_day: 10
+
+linkedin_easy_apply:
+  # Apply through LinkedIn while signed in to LinkedIn in Job Agent Chrome (Kelly turned this on
+  # 2026-11-19, accepting that LinkedIn may restrict accounts it thinks are automated).
+  # Easy Apply jobs are filled and sent right away; "Apply on company site" jobs are followed
+  # to the employer's form. Steps are human-paced.
+  enabled: true
+  max_per_day: 40

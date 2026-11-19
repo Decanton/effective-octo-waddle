@@ -11,7 +11,15 @@ import re
 from ..intelligence.answer_engine import Question
 
 DISCOVER_JS = r"""
-() => {
+(rootSel) => {
+  const pickRoot = (sel) => {
+    if (sel) { const r = document.querySelector(sel); if (r) return r; }
+    // The application form is the one with the most fields (not a search or newsletter form).
+    const forms = [...document.querySelectorAll('form')];
+    const count = f => f.querySelectorAll('input:not([type=hidden]), textarea, select').length;
+    const best = forms.sort((a, b) => count(b) - count(a))[0];
+    return best && count(best) >= 2 ? best : document;
+  };
   const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
     return (r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none') || el.type === 'file'; };
   const clean = t => (t || '').replace(/\s+/g, ' ').trim();
@@ -39,7 +47,7 @@ DISCOVER_JS = r"""
     return clean(el.name);
   };
   const out = []; const groups = {}; let n = 0;
-  const root = document.querySelector('form') || document;
+  const root = pickRoot(rootSel);
   for (const el of root.querySelectorAll('input, textarea, select')) {
     const t = (el.type || el.tagName).toLowerCase();
     if (['hidden', 'submit', 'button', 'reset', 'image', 'search'].includes(t) || el.disabled || !vis(el)) continue;
@@ -65,8 +73,9 @@ DISCOVER_JS = r"""
 TEXT_KINDS = {"text", "email", "tel", "url", "number", "textarea", "combobox", "date"}
 
 
-def discover(page) -> list[dict]:
-    fields = page.evaluate(DISCOVER_JS)
+def discover(page, root: str | None = None) -> list[dict]:
+    """Fields of the application form (or of `root`, a CSS selector such as a modal)."""
+    fields = page.evaluate(DISCOVER_JS, root)
     for f in fields:
         f["required"] = bool(f["required"] or "*" in f["label"])
         f["label"] = re.sub(r"\s*\*\s*$", "", f["label"]).strip()
@@ -117,13 +126,21 @@ def fill_field(page, f: dict, value) -> bool:
 
 
 VERIFY_JS = r"""
-(consentLabels) => {
+([consentLabels, rootSel]) => {
+  const pickRoot = (sel) => {
+    if (sel) { const r = document.querySelector(sel); if (r) return r; }
+    // The application form is the one with the most fields (not a search or newsletter form).
+    const forms = [...document.querySelectorAll('form')];
+    const count = f => f.querySelectorAll('input:not([type=hidden]), textarea, select').length;
+    const best = forms.sort((a, b) => count(b) - count(a))[0];
+    return best && count(best) >= 2 ? best : document;
+  };
   const clean = t => (t || '').replace(/\s+/g, ' ').trim();
   const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
     return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
   const problems = [];
   const skip = new Set(consentLabels || []);
-  const root = document.querySelector('form') || document;
+  const root = pickRoot(rootSel);
   const seenGroups = new Set();
   for (const el of root.querySelectorAll('input, textarea, select')) {
     const t = (el.type || el.tagName).toLowerCase();
@@ -163,12 +180,12 @@ VERIFY_JS = r"""
 """
 
 
-def verify(page, consent_ids: tuple[str, ...] = ()) -> list[str]:
+def verify(page, consent_ids: tuple[str, ...] = (), root: str | None = None) -> list[str]:
     """Problems that would stop a real submission: empty required fields, no CV attached,
     or visible validation errors. An empty list means the form is verified ready.
     consent_ids: data-jsa ids of consent boxes deliberately left for you (not counted)."""
     try:
-        problems = page.evaluate(VERIFY_JS, list(consent_ids))
+        problems = page.evaluate(VERIFY_JS, [list(consent_ids), root])
     except Exception as exc:
         return [f"could not check the form: {exc}"]
     return problems
