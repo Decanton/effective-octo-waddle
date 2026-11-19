@@ -51,8 +51,15 @@ def _contains_any(text: str, phrases) -> str | None:
     return None
 
 
+def max_age_for(job: dict, search_cfg: dict) -> float:
+    """The age limit for this job's source (company boards may allow longer; see search_queries.yaml)."""
+    kind = (job.get("source") or "").split(":")[0]
+    per = search_cfg.get("max_age_hours_by_source") or {}
+    return float(per.get(kind, search_cfg.get("max_age_hours", 24)))
+
+
 def check_job(job: dict, search_cfg: dict, platform_cfg: dict | None = None) -> Verdict:
-    max_age = float(search_cfg.get("max_age_hours", 24))
+    max_age = max_age_for(job, search_cfg)
     if job.get("age_hours") is None:
         return Verdict(False, "REJECTED_STALE", "no reliable posting date")
     if not is_fresh(job["age_hours"], max_age):
@@ -117,7 +124,7 @@ def rank(jobs: list[dict], profile: dict, search_cfg: dict, platform_cfg: dict |
         if v.keep:
             seen.add(key)
             fit, track = fit_score(j, profile)
-            pri = wf * fit + wr * recency_score(j["age_hours"], max_age) + wl * low_applicant_score(j.get("applicant_count"), thr)
+            pri = wf * fit + wr * recency_score(j["age_hours"], max_age_for(j, search_cfg)) + wl * low_applicant_score(j.get("applicant_count"), thr)
             j.update(track=track, fit_score=fit, priority_score=round(pri, 4))
         out.append(j)
     min_fit = float(w.get("min_fit", 0.30))

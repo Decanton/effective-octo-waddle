@@ -184,3 +184,10 @@ def test_title_cleanup_and_staff_excluded():
     assert "&amp;" not in j["title"]
     out = rank([j], load_profile(), load_yaml("search_queries.yaml"))
     assert out[0]["status"] == "REJECTED_KNOCKOUT"
+
+
+def test_per_source_age_limit():
+    cfg = dict(load_yaml("search_queries.yaml"), max_age_hours_by_source={"greenhouse": 72})
+    from src.intelligence.job_ranker import check_job
+    assert check_job(_job(source="greenhouse:x", age_hours=50), cfg).keep
+    assert not check_job(_job(source="remotive", age_hours=50), cfg).keep

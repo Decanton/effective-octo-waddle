@@ -1,6 +1,10 @@
 # What to search for. Edit freely; the agent reads this every run.
 max_age_hours: 24            # strict: older or undated jobs are dropped
 
+# Optional longer limits for company job boards, whose forms the agent can fill.
+# Example: {greenhouse: 72, lever: 72, ashby: 72}. Empty means 24 hours everywhere.
+max_age_hours_by_source: {}
+
 # Each search runs on every site in `sites`. Track is a hint for CV tailoring.
 searches:
   - {term: '"AI trainer" OR "LLM evaluation" OR "data annotation" OR "AI data specialist"', track: ai_data}
