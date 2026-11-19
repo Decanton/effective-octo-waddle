@@ -201,8 +201,10 @@ def send(ws, staged_id: int, overrides: dict | None = None, smtp_factory=None) -
     except (smtplib.SMTPException, OSError) as exc:
         return {"ok": False, "error": f"could not send: {exc}"}
     with db.session(ws.db_path) as conn:
-        conn.execute("UPDATE staged_forms SET state = 'SUBMITTED', submitted_at = ?, error = ? WHERE id = ?",
-                     (db.now_iso(), f"Emailed to {to}", staged_id))
+        receipt = {"method": "email", "to": to, "subject": subject, "message_id": msg["Message-ID"], "submitted_at": db.now_iso(),
+                   "confirmation": f"Sent from {addr} to {to} with the CV and cover letter attached"}
+        conn.execute("UPDATE staged_forms SET state = 'SUBMITTED', submitted_at = ?, error = ?, receipt_json = ? WHERE id = ?",
+                     (db.now_iso(), f"Emailed to {to}", json.dumps(receipt), staged_id))
         db.set_job_status(conn, row["job_id"], "SUBMITTED", f"emailed CV and cover letter to {to}")
     log.info("Emailed application for %s @ %s to %s", row["title"], row["company"], to)
     return {"ok": True}

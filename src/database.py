@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -69,7 +69,14 @@ CREATE TABLE IF NOT EXISTS staged_forms (
     error          TEXT,
     created_at     TEXT NOT NULL,
     submitted_at   TEXT,
-    receipt_json   TEXT
+    receipt_json   TEXT,
+    posting_snapshot TEXT
+);
+
+CREATE TABLE IF NOT EXISTS followups (
+    staged_form_id INTEGER PRIMARY KEY REFERENCES staged_forms(id) ON DELETE CASCADE,
+    to_addr        TEXT,
+    sent_at        TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS portal_credentials (
@@ -143,6 +150,8 @@ def init_db(db_path: Path) -> None:
             conn.execute("ALTER TABLE staged_forms ADD COLUMN form_url TEXT")
         if "receipt_json" not in cols:
             conn.execute("ALTER TABLE staged_forms ADD COLUMN receipt_json TEXT")
+        if "posting_snapshot" not in cols:  # the job post as it was when the agent applied
+            conn.execute("ALTER TABLE staged_forms ADD COLUMN posting_snapshot TEXT")
         conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
 
 

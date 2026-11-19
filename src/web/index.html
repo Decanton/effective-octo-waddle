@@ -74,6 +74,10 @@
   .banner { border-radius:10px; padding:10px 14px; margin:14px 0; font-size:13.5px; border:1px solid transparent; }
   .banner.ok { background:var(--ok-soft); color:var(--ok); } .banner.warn { background:var(--warn-soft); color:var(--warn); }
   .banner.info { background:var(--info-soft); color:var(--info); } .banner.plain { background:var(--panel2); border-color:var(--line); color:var(--muted); }
+  ul.req { margin:6px 0 10px 18px; padding:0; } ul.req li { margin:3px 0; } ul.req li.ok::marker { content:"✓  "; color:var(--ok, #1a7f37); } ul.req li.miss::marker { content:"✗  "; color:var(--warn, #b35900); }
+  pre.post { white-space:pre-wrap; max-height:320px; overflow:auto; font:inherit; font-size:13px; background:var(--accent-soft); padding:10px; border-radius:8px; }
+  .funnel { display:grid; gap:6px; margin:12px 0; } .fstep { display:grid; grid-template-columns:90px 1fr 40px; gap:8px; align-items:center; }
+  .fbar { height:10px; background:var(--accent-soft); border-radius:6px; overflow:hidden; } .fbar i { display:block; height:100%; background:var(--accent); }
   .scores { display:flex; gap:18px; flex-wrap:wrap; margin:10px 0 0; }
   .score .l { color:var(--muted); font-size:11.5px; } .score .v { font-weight:700; font-variant-numeric:tabular-nums; }
   .bar { width:90px; height:5px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:3px; }
@@ -110,6 +114,7 @@
   <nav>
     <button data-tab="jobs" class="on">Applications</button>
     <button data-tab="emails">Recruiter emails<span class="badge" id="ebadge" hidden></span></button>
+    <button data-tab="results">Results</button>
     <button data-tab="platforms">AI platforms</button>
   </nav>
   <div class="hdr-actions">
@@ -200,6 +205,7 @@ function visible() {
 
 function render() {
   if (tab === "platforms") return renderPlatforms();
+  if (tab === "results") return renderResults();
   if (tab === "emails") return renderEmails();
   $("#filters").innerHTML = FILTERS.map(([k, l]) => {
     const n = k === "all" ? items.length : items.filter(it => { const g = (STATE[it.state] || {}).group; return k === "todo" ? g !== "sent" : g === k; }).length;
@@ -286,10 +292,59 @@ function renderDetail(it) {
     ${letter != null ? `<h3>Cover letter</h3><textarea class="big" data-ov="Cover letter" ${canSubmit ? "" : "readonly"}>${esc(letter)}</textarea>` : ""}
     ${rows ? `<h3>${isMail(it) ? "Email" : "Answers on the form"}</h3><table>${rows}</table>` : ""}
     ${it.matched_keywords ? `<h3>CV keywords matched</h3><div class="chips">${String(it.matched_keywords).split(/,\s*/).slice(0, 24).map(k => `<span class="chip">${esc(k)}</span>`).join("")}</div>` : ""}
+    <details id="why"><summary>Why this job</summary><div class="note">Loading…</div></details>
+    <details id="rec"><summary>Application record</summary><div class="note">Loading…</div></details>
     ${it.has_shot ? `<details><summary>Screenshot of the filled form</summary><img class="shot" src="/files/screenshot/${it.id}" alt="Filled application form"></details>` : ""}`;
+  $("#why").ontoggle = () => $("#why").open && loadWhy(it.id);
+  $("#rec").ontoggle = () => $("#rec").open && loadRecord(it.id);
   if ($("#skip")) $("#skip").onclick = skip;
   if ($("#submit")) $("#submit").onclick = submit;
   if ($("#done")) $("#done").onclick = () => post(`/api/applied_myself/${it.id}`).then(() => { say("Marked as sent."); load(); });
+}
+
+async function loadWhy(sid) {
+  const box = $("#why > div"); if (!box || box.dataset.done) return;
+  const x = await fetch(`/api/explain/${sid}`).then(r => r.json()).catch(() => null);
+  if (!x) { box.textContent = "Couldn't load the explanation."; return; }
+  const li = (rs, cls) => rs.length ? `<ul class="req">${rs.map(r => `<li class="${cls}">${esc(r.text)}${r.because && r.because.length ? ` <span class="note">(${esc(r.because.join(", "))})</span>` : ""}</li>`).join("")}</ul>` : `<p class="note">None listed.</p>`;
+  box.dataset.done = 1;
+  box.className = "";
+  box.innerHTML = `${x.reasons.length ? `<ul>${x.reasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+    <h4>What you have that they ask for (${x.requirements_met.length})</h4>${li(x.requirements_met, "ok")}
+    <h4>What they ask that your CV doesn't show (${x.requirements_missing.length})</h4>${li(x.requirements_missing, "miss")}
+    <p class="note">Scores: fit ${Math.round(x.scores.fit * 100)}, freshness ${Math.round(x.scores.recency * 100)}, few applicants ${Math.round(x.scores.low_applicants * 100)}.</p>`;
+}
+
+async function loadRecord(sid) {
+  const box = $("#rec > div"); if (!box || box.dataset.done) return;
+  const x = await fetch(`/api/record/${sid}`).then(r => r.json()).catch(() => null);
+  if (!x) { box.textContent = "Couldn't load the record."; return; }
+  const p = x.posting || {}, rc = x.receipt;
+  box.dataset.done = 1; box.className = "";
+  box.innerHTML = `
+    <p><b>Sent:</b> ${x.submitted_at ? esc(new Date(x.submitted_at).toLocaleString()) : "not yet"} ${x.applied_to ? `to ${esc(x.applied_to.replace(/^mailto:/, ""))}` : ""}</p>
+    ${rc ? `<p><b>Receipt:</b> ${esc(rc.confirmation || "no confirmation text")}${rc.url ? ` · <a href="${esc(rc.url)}" target="_blank" rel="noopener">page</a>` : ""}</p>` : ""}
+    ${x.follow_up ? `<p><b>Follow-up:</b> sent ${esc(new Date(x.follow_up.sent_at).toLocaleString())}</p>` : ""}
+    ${x.replies.length ? `<p><b>Replies:</b></p><ul>${x.replies.map(m => `<li>${esc(m.subject)} <span class="note">${esc(m.from_addr)} · ${esc(ago(m.received_at))}</span></li>`).join("")}</ul>` : ""}
+    <p><b>CV:</b> ${esc(x.cv.file || "—")} (${esc(x.cv.track || "")} track)</p>
+    <details><summary>The job post as it was${p.captured_at ? ` on ${esc(new Date(p.captured_at).toLocaleDateString())}` : ""}</summary><pre class="post">${esc(p.description || "")}</pre></details>`;
+}
+
+async function renderResults() {
+  $("#filters").innerHTML = ""; $("#list").innerHTML = "";
+  const r = await fetch("/api/results").then(x => x.json()).catch(() => null);
+  if (!r) { $("#detail").innerHTML = `<p class="note">Couldn't load results.</p>`; return; }
+  const f = r.funnel, steps = [["Found", f.found], ["Good fit", f.qualified], ["Filled", f.staged], ["Sent", f.sent], ["Replied", f.replied], ["Interviews", f.interviews], ["Offers", f.offers]];
+  const max = Math.max(1, ...steps.map(s => s[1]));
+  const chip = s => ({ interview: "ok", offer: "ok", rejected: "", replied: "info", waiting: "" })[s] ?? "";
+  $("#list").innerHTML = `<div class="tools"><p class="note">Last ${r.days} days</p></div>` + Object.entries(r.by_source).map(([s, v]) =>
+    `<div class="item"><div style="min-width:0"><div class="t">${esc(s)}</div><div class="c">${v.sent} sent · ${v.replied} answered</div></div></div>`).join("");
+  $("#detail").innerHTML = `<h2>Results</h2>
+    <div class="funnel">${steps.map(([l, n]) => `<div class="fstep"><span class="fl">${l}</span><span class="fbar"><i style="width:${Math.round(n / max * 100)}%"></i></span><b>${n}</b></div>`).join("")}</div>
+    <p class="note">${r.response_rate == null ? "No applications sent yet." : `Response rate ${Math.round(r.response_rate * 100)}%.`} A follow-up email goes out by itself after 7 days with no answer (email applications only, once).</p>
+    <h3>Applications</h3>
+    ${r.applications.length ? `<table>${r.applications.map(a => `<tr><td class="q">${esc(a.title)}<div class="note">${esc(a.company || "")} · ${a.method} · ${esc(ago(a.submitted_at))}</div></td>
+      <td><span class="chip ${chip(a.status)}">${a.status}</span>${a.follow_up_due ? ' <span class="chip warn">follow-up due</span>' : a.followed_up ? ' <span class="chip">followed up</span>' : ""}</td></tr>`).join("")}</table>` : `<p class="note">Nothing sent in this period.</p>`}`;
 }
 
 async function post(url, body) {

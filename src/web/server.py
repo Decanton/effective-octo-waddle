@@ -80,6 +80,48 @@ def create_app(ws) -> FastAPI:
                     "emails_waiting": c.execute("SELECT COUNT(*) FROM recruiter_emails WHERE state = 'DRAFTED'").fetchone()[0],
                     "task": _task_status()}
 
+    @app.get("/api/explain/{sid}")
+    def explain_job(sid: int):
+        """Why this job: matched and missing requirements, and the scores."""
+        from ..cv_tailor.single_template_tailor import load_profile
+        from ..intelligence.explain import explain
+        with db.session(ws.db_path) as c:
+            r = c.execute("SELECT j.* FROM staged_forms s JOIN jobs j ON j.id = s.job_id WHERE s.id = ?", (sid,)).fetchone()
+        if not r:
+            raise HTTPException(404)
+        return explain(dict(r), load_profile())
+
+    @app.get("/api/record/{sid}")
+    def record(sid: int):
+        """Everything about one application: the post as it was, the answers, the CV, the receipt, replies."""
+        from .. import analytics
+        with db.session(ws.db_path) as c:
+            r = c.execute("SELECT s.*, j.title, j.company, j.url, j.description, j.posted_at, t.docx_path, t.matched_keywords, t.track "
+                          "FROM staged_forms s JOIN jobs j ON j.id = s.job_id LEFT JOIN tailored_cvs t ON t.id = s.cv_id WHERE s.id = ?",
+                          (sid,)).fetchone()
+            if not r:
+                raise HTTPException(404)
+            d = dict(r)
+            mails = [dict(m) for m in c.execute("SELECT from_addr, from_name, subject, category, received_at FROM recruiter_emails")]
+            replies = analytics.replies_for(c, d, mails)
+            fu = c.execute("SELECT to_addr, sent_at FROM followups WHERE staged_form_id = ?", (sid,)).fetchone()
+        return {"title": d["title"], "company": d["company"], "state": d["state"], "applied_to": d["form_url"],
+                "posting": json.loads(d["posting_snapshot"] or "null") or {"title": d["title"], "company": d["company"], "url": d["url"],
+                                                                         "posted_at": d["posted_at"], "description": d["description"],
+                                                                         "captured_at": None},
+                "answers": json.loads(d["answers_json"] or "[]"),
+                "cv": {"file": Path(d["docx_path"]).name if d["docx_path"] else None, "track": d["track"],
+                       "matched_keywords": [k for k in (d["matched_keywords"] or "").split(", ") if k]},
+                "receipt": json.loads(d["receipt_json"] or "null"), "submitted_at": d["submitted_at"],
+                "follow_up": dict(fu) if fu else None, "replies": replies}
+
+    @app.get("/api/results")
+    def results(days: int = 30):
+        from .. import analytics
+        from ..settings import load_settings
+        with db.session(ws.db_path) as c:
+            return analytics.results(c, days, int(load_settings()["follow_ups"].get("after_days", 7)))
+
     @app.get("/files/screenshot/{sid}")
     def screenshot(sid: int):
         with db.session(ws.db_path) as c:

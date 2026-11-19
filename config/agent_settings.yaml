@@ -105,3 +105,11 @@ llm:
   # local_only: only Ollama on this laptop (install from ollama.com, set OLLAMA_MODEL in .env). Nothing leaves the laptop.
   # off:        no AI; template letters, and written questions wait for you.
   mode: cloud
+
+follow_ups:
+  # One polite follow-up email for email applications with no answer after `after_days`.
+  # Never for forms, never to mailers, never twice, and not once the company has replied.
+  enabled: true
+  after_days: 7
+  auto_send: true
+  max_per_day: 10

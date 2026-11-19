@@ -142,6 +142,13 @@ def send_all(ws, log) -> None:
             auto_send(conn, settings["recruiter_replies"])
     except Exception as exc:  # email trouble must not stop the run
         log.warning("Recruiter replies were not sent: %s", exc)
+    try:
+        from src.cv_tailor.single_template_tailor import load_profile
+        from src.email_agent import followups
+        with db.session(ws.db_path) as conn:
+            followups.run(conn, settings["follow_ups"], load_profile())
+    except Exception as exc:
+        log.warning("Follow-ups were not sent: %s", exc)
 
 
 def stage(ws, log, limit=None) -> dict:

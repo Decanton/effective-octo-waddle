@@ -393,6 +393,14 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
     return state
 
 
+def snapshot(conn, job: dict) -> None:
+    """Keep the job post exactly as it was when the agent applied (posts get edited or taken down)."""
+    snap = {k: job.get(k) for k in ("title", "company", "location", "url", "apply_url", "source", "posted_at", "description")}
+    snap["captured_at"] = db.now_iso()
+    conn.execute("UPDATE staged_forms SET posting_snapshot = ? WHERE job_id = ? AND posting_snapshot IS NULL",
+                 (json.dumps(snap), job["id"]))
+
+
 def run(ws, limit: int | None = None) -> dict:
     """Stage the top qualified jobs that haven't been staged yet."""
     from .browser_manager import browser
@@ -435,6 +443,7 @@ def run(ws, limit: int | None = None) -> dict:
             with db.session(ws.db_path) as conn:
                 try:
                     state = stage_job(page, conn, ws, job, engine, profile)
+                    snapshot(conn, job)
                 except Exception as exc:  # one bad form must not stop the sprint
                     log.warning("Staging failed for %s at %s: %s", job["title"], job.get("company"), exc)
                     db.set_job_status(conn, job["id"], "FAILED", str(exc)[:200])

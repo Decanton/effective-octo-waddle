@@ -19,6 +19,7 @@ DEFAULTS = {
     "human_assist": {"enabled": True, "attended": False, "wait_seconds": 120, "sms_wait_seconds": 10, "keep_messages_open": True,
                      "pacing": {"between_steps_seconds": [1.5, 4.0], "between_fields_seconds": [0.2, 0.6]}},
     "llm": {"mode": "cloud"},
+    "follow_ups": {"enabled": True, "after_days": 7, "auto_send": True, "max_per_day": 10},
     "browser": {"use_cdp": True, "cdp_port": 9222},
 }
 
