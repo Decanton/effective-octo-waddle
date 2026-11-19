@@ -1,0 +1,20 @@
+<!doctype html><html><body>
+<h1>Apply for Backend Engineer</h1>
+<form action="thanks.html" method="get">
+  <div class="field"><label for="first_name">First Name *</label><input id="first_name" name="first_name" required></div>
+  <div class="field"><label for="last_name">Last Name *</label><input id="last_name" name="last_name" required></div>
+  <div class="field"><label for="email">Email *</label><input id="email" type="email" name="email" required></div>
+  <div class="field"><label for="phone">Phone</label><input id="phone" type="tel" name="phone"></div>
+  <div class="field"><label for="resume">Resume/CV *</label><input id="resume" type="file" name="resume" required></div>
+  <div class="field"><label for="li">LinkedIn Profile</label><input id="li" name="li"></div>
+  <div class="field"><label for="yrs">How many years of experience do you have?</label>
+    <select id="yrs" name="yrs"><option value="">Select</option><option>0-2</option><option>3-5</option><option>6+</option></select></div>
+  <fieldset><legend>Will you now or in the future require visa sponsorship? *</legend>
+    <label><input type="radio" name="spons" value="y" required> Yes</label>
+    <label><input type="radio" name="spons" value="n"> No</label></fieldset>
+  <div class="field"><label for="gender">Gender</label>
+    <select id="gender" name="gender"><option value="">Select</option><option>Male</option><option>Female</option><option>Decline to self-identify</option></select></div>
+  <div class="field"><label for="why">Why do you want to work here?</label><textarea id="why" name="why"></textarea></div>
+  <div class="field"><label><input type="checkbox" id="consent" name="consent" required> I agree to the privacy policy *</label></div>
+  <button type="submit">Submit application</button>
+</form></body></html>

@@ -24,6 +24,11 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
+if not exist ".venv\.playwright-ok" (
+    echo Installing the browser used to fill forms. This happens once...
+    ".venv\Scripts\python.exe" -m playwright install chromium && echo ok> ".venv\.playwright-ok"
+)
+
 ".venv\Scripts\python.exe" run_sprint.py %*
 echo.
 pause

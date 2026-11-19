@@ -7,8 +7,8 @@ A free, local job application and recruiter email agent for a one-hour daily ses
 |---|---|---|
 | 1 | Desktop folder, database, your profile, master CV template, CV tailoring, launchers | Done |
 | 2 | Job discovery (last 24 hours only) and ranking by fit and low applicant count | Done |
-| 3 | Tailored CV per job, form filling that stops before Submit, review page at http://127.0.0.1:8000 | Next |
-| 4 | Inbox scanning and recruiter reply drafts that you approve before sending | Planned |
+| 3 | Tailored CV per job, form filling that stops before Submit, review page at http://127.0.0.1:8000 | Done |
+| 4 | Inbox scanning and recruiter reply drafts that you approve before sending | Next |
 
 ## First run on Windows
 1. Install Python 3.11 or newer from python.org if you haven't (tick "Add python.exe to PATH").
@@ -22,7 +22,10 @@ Run these from this folder, after the first run, with `.venv\Scripts\python.exe 
 
 | Command | What it does |
 |---|---|
-| `run_sprint.py` | Daily sprint (for now: profile check, then find and rank jobs) |
+| `run_sprint.py` | Daily sprint: profile check, find and rank jobs, fill forms (stopping before Submit), then open the review page |
+| `run_sprint.py --login-setup` | Opens the saved browser so you can sign in to LinkedIn, AfterQuery and others once |
+| `run_sprint.py --stage-only --stage-limit 5` | Fills forms for the top 5 qualified jobs, without submitting |
+| `run_sprint.py --review` | Opens the review page at http://127.0.0.1:8000 |
 | `run_sprint.py --discover` | Finds jobs posted in the last 24 hours, ranks them and saves a CSV in `JobSprintAgent\exports` |
 | `run_sprint.py --mark-applied AfterQuery` | Marks an AI platform as applied so it stops being listed |
 | `run_sprint.py --check` | Checks your profile and lists screening answers you still need to fill in |
@@ -35,6 +38,12 @@ Run these from this folder, after the first run, with `.venv\Scripts\python.exe 
 - **Knockouts:** titles like Director or Intern, descriptions requiring US citizenship or clearance, onsite jobs outside Kenya, and remote jobs restricted to the US, UK or EU.
 - **Ranking:** 55% fit with your profile, 20% how recent, 25% how few applicants. An unknown applicant count is neutral. Weights live in `master_profile.json` under `ranking_weights`.
 - **AI platforms** with no dated postings (AfterQuery, Outlier, Alignerr, DataAnnotation, Mercor) are listed each run until you mark them applied.
+
+## Applying: what happens and what never happens
+- For each top job the agent builds a tailored CV, opens the real application form (Greenhouse, Lever or Ashby, including ones linked from remote job boards), fills what it can from your profile, uploads the CV and takes a screenshot. It **never presses Submit** while staging.
+- Questions your profile can't answer are flagged **needs you**. Demographic questions get "decline to self-identify" when offered. Consent and privacy boxes are never ticked for you: you tick them on the review page.
+- Written questions ("Why do you want to work here?") get a short AI draft from Gemini or Groq using only your profile. It is marked **AI draft** for you to read and edit.
+- On the review page, **Submit** reopens the form, fills it again with your edits, and presses Submit in a visible browser so you can solve any CAPTCHA. **Skip** drops the job. Jobs with no supported form show **Open application** and your tailored CV to apply yourself.
 
 ## Your profile
 `config/master_profile.json` holds every fact the agent may use, taken from your four CVs. The agent never invents anything. Fill in the `screening_answers` that are `null` (notice period, salary, work authorisation and so on). Until you do, any form that asks them is flagged `NEEDS_USER_INPUT` for you to answer.

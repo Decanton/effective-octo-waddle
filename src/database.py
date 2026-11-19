@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS staged_forms (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id         INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     cv_id          INTEGER REFERENCES tailored_cvs(id),
+    form_url       TEXT,
     answers_json   TEXT,
     missing_json   TEXT,
     state          TEXT NOT NULL DEFAULT 'STAGING',
@@ -107,7 +108,7 @@ CREATE TABLE IF NOT EXISTS recruiter_emails (
 
 # Allowed job statuses, in the order a job normally moves through them.
 JOB_STATUSES = ("NEW", "REJECTED_STALE", "REJECTED_KNOCKOUT", "QUALIFIED", "CV_READY",
-                "STAGING", "READY_TO_SUBMIT", "NEEDS_USER_INPUT", "NEEDS_LOGIN",
+                "STAGING", "READY_TO_SUBMIT", "NEEDS_USER_INPUT", "NEEDS_LOGIN", "MANUAL_APPLY",
                 "SUBMITTED", "SKIPPED", "FAILED")
 
 
@@ -127,6 +128,9 @@ def init_db(db_path: Path) -> None:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     with connect(db_path) as conn:
         conn.executescript(SCHEMA)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(staged_forms)")}
+        if "form_url" not in cols:  # upgrade a database made by an earlier step
+            conn.execute("ALTER TABLE staged_forms ADD COLUMN form_url TEXT")
         conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
 
 

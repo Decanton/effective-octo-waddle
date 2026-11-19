@@ -7,8 +7,12 @@
   python run_sprint.py --cv-for FILE  build a tailored CV for a job description saved in FILE
   python run_sprint.py --discover   find jobs from the last 24 hours and rank them
   python run_sprint.py --mark-applied NAME  mark an AI platform (e.g. AfterQuery) as applied
+  python run_sprint.py --login-setup  open the saved browser so you can sign in to sites once
+  python run_sprint.py --stage-only   fill forms for the top qualified jobs (stops before Submit)
+  python run_sprint.py --review       open the review page at http://127.0.0.1:8000
+  python run_sprint.py --stage-limit N  stage at most N jobs this run
 
-Coming in later steps: --stage-only (step 3), --login-setup (step 3), --email-only (step 4).
+Coming in step 4: --email-only.
 """
 from __future__ import annotations
 
@@ -26,8 +30,6 @@ from src import database as db  # noqa: E402
 from src.workspace import ensure_workspace  # noqa: E402
 
 PLANNED = {
-    "stage_only": "Form staging arrives in step 3 of the plan. Use --discover to find and rank jobs.",
-    "login_setup": "Browser login setup arrives in step 3 of the plan.",
     "email_only": "Inbox scanning and recruiter replies arrive in step 4 of the plan.",
 }
 
@@ -118,6 +120,22 @@ def discover(ws, log) -> int:
     return 0
 
 
+def stage(ws, log, limit=None) -> dict:
+    from src.automation import form_stager
+    with db.session(ws.db_path) as conn:
+        run_id = db.start_run(conn, "stage")
+    counts = form_stager.run(ws, limit)
+    with db.session(ws.db_path) as conn:
+        db.finish_run(conn, run_id, jobs_staged=counts.get("READY_TO_SUBMIT", 0) + counts.get("NEEDS_USER_INPUT", 0),
+                      notes=json.dumps(counts))
+        ready = conn.execute("SELECT COUNT(*) FROM staged_forms WHERE state = 'READY_TO_SUBMIT'").fetchone()[0]
+    target = int(json.loads((ROOT / "config" / "master_profile.json").read_text(encoding="utf-8"))
+                 .get("workspace", {}).get("daily_stage_target", 20))
+    if ready >= target:
+        log.info("%d applications are ready to submit (target %d). Time to review!", ready, target)
+    return counts
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Local job application and recruiter email agent")
     ap.add_argument("--setup", action="store_true")
@@ -127,6 +145,9 @@ def main(argv=None) -> int:
     ap.add_argument("--discover", action="store_true")
     ap.add_argument("--mark-applied", metavar="PLATFORM")
     ap.add_argument("--stage-only", action="store_true")
+    ap.add_argument("--stage-limit", type=int)
+    ap.add_argument("--review", action="store_true")
+    ap.add_argument("--no-review", action="store_true", help="don't open the review page at the end")
     ap.add_argument("--login-setup", action="store_true")
     ap.add_argument("--email-only", action="store_true")
     args = ap.parse_args(argv)
@@ -158,12 +179,28 @@ def main(argv=None) -> int:
         return 0
     if args.discover:
         return discover(ws, log)
+    if args.login_setup:
+        from src.automation.browser_manager import login_setup
+        login_setup(ws)
+        return 0
+    if args.stage_only:
+        stage(ws, log, args.stage_limit)
+        return 0
+    if args.review:
+        from src.web.server import serve
+        serve(ws)
+        return 0
 
-    # Daily sprint. Steps 1-2 so far: check the profile, then find and rank jobs.
+    # Daily sprint: check profile, find and rank jobs, stage forms, then open the review page.
     if check(log):
         log.error("Fix the profile problems above, then run again.")
         return 1
-    return discover(ws, log)
+    discover(ws, log)
+    stage(ws, log, args.stage_limit)
+    if not args.no_review:
+        from src.web.server import serve
+        serve(ws)
+    return 0
 
 
 if __name__ == "__main__":
