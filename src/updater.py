@@ -144,6 +144,11 @@ def check_and_update(ws, app_dir: Path = APP_DIR, cfg: dict | None = None, force
         if _git("rev-parse", "HEAD", cwd=src, timeout=10) != new:
             raise RuntimeError("downloaded code doesn't match GitHub")
         if cfg.get("run_tests", True):
+            # New libraries (or test tools) the new version needs go in first, so its tests can run.
+            if _digest(src / "requirements.txt") != _digest(app_dir / "requirements.txt"):
+                subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "-q", "-r",
+                                str(src / "requirements.txt")], cwd=str(src), timeout=900,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             ok, summary = run_tests(src)
             if not ok:
                 raise RuntimeError(f"tests failed on the new version ({summary}); kept the current one")
