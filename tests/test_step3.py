@@ -35,9 +35,11 @@ def test_unknown_screening_answers_are_never_guessed(engine):
     assert a.needs_user and a.value is None
 
 
-def test_eeo_declines_and_consent_is_left_for_user(engine):
+def test_eeo_uses_profile_then_declines_and_consent_is_left_for_user(engine):
     a = engine.answer(Question("Gender", kind="select", options=["Male", "Female", "Decline to self-identify"]))
-    assert a.value == "Decline to self-identify"
+    assert a.value == "Male"  # Kelly's answer in master_profile demographics
+    a = engine.answer(Question("Sexual orientation", kind="select", options=["Straight", "Gay", "Decline to self-identify"]))
+    assert a.value == "Decline to self-identify"  # not in the profile: declined
     a = engine.answer(Question("I agree to the privacy policy", kind="checkbox", required=True))
     assert a.consent and a.value is None
 
@@ -83,7 +85,7 @@ def test_stage_stops_before_submit_then_submit_after_approval(tmp_path, monkeypa
         job = dict(c.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone())
     answers = {a["label"]: a for a in json.loads(s["answers_json"])}
     assert answers["First Name"]["filled"] and answers["Email"]["filled"] and answers["Resume/CV"]["filled"]
-    assert answers["Gender"]["value"] == "Decline to self-identify"
+    assert answers["Gender"]["value"] == "Male"
     assert answers["I agree to the privacy policy"]["consent"] and not answers["I agree to the privacy policy"]["filled"]
     assert s["state"] in ("NEEDS_USER_INPUT", "READY_TO_SUBMIT") and job["status"] == s["state"]
     assert "SUBMITTED" not in (s["state"], job["status"])  # staging never submits

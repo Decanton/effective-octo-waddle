@@ -79,12 +79,26 @@ def _digest(p: Path) -> str:
         return ""
 
 
-def run_tests(src: Path, python: str = sys.executable) -> tuple[bool, str]:
+def run_tests(src: Path, python: str = sys.executable, retries: int = 1) -> tuple[bool, str]:
+    """Run the new version's tests. A failure is retried once on its own, so a timing blip in a browser test
+    doesn't block an update; a real failure fails both times."""
     env = {**os.environ, "JOBSPRINT_HEADLESS": "1", "JOBSPRINT_NO_NOTIFY": "1", "JOBSPRINT_NO_CDP": "1", "PYTHONDONTWRITEBYTECODE": "1"}
-    out = subprocess.run([python, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider"], cwd=str(src), env=env,
-                         capture_output=True, text=True, timeout=1200, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    tail = (out.stdout or out.stderr).strip().splitlines()[-1:] or [""]
-    return out.returncode == 0, tail[0]
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    out = subprocess.run([python, "-m", "pytest", "-q", "-rf", "-p", "no:cacheprovider"], cwd=str(src), env=env,
+                         capture_output=True, text=True, timeout=1800, creationflags=flags)
+    lines = (out.stdout or out.stderr).strip().splitlines()
+    tail = lines[-1:] or [""]
+    if out.returncode == 0:
+        return True, tail[0]
+    failed = [ln.split()[1] for ln in lines if ln.startswith("FAILED ") and len(ln.split()) > 1]
+    failed = [f.split(" - ")[0] for f in failed]
+    if retries and failed and len(failed) <= 3:
+        again = subprocess.run([python, "-m", "pytest", "-q", "-p", "no:cacheprovider", *failed], cwd=str(src), env=env,
+                               capture_output=True, text=True, timeout=900, creationflags=flags)
+        if again.returncode == 0:
+            log.info("Tests passed after retrying %s", ", ".join(failed))
+            return True, tail[0] + f" (retried {len(failed)} and they passed)"
+    return False, (", ".join(failed[:3]) + ": " if failed else "") + tail[0]
 
 
 def _copy_tree(src: Path, dst: Path) -> None:

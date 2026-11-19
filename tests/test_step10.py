@@ -93,3 +93,20 @@ def test_demographic_answers_from_profile():
     assert q("Veteran status", ["I am a protected veteran", "I am not a protected veteran", "Decline"]) == "I am not a protected veteran"
     assert q("Disability", ["Yes, I have a disability", "No, I do not have a disability", "I don't want to answer"]) == "No, I do not have a disability"
     assert q("Race", ["Asian", "Black or African American", "Decline to self-identify"]) == "Black or African American"
+
+
+def test_updater_retries_a_flaky_test_once(tmp_path):
+    import sys
+    from src import updater
+    (tmp_path / "test_x.py").write_text(
+        "import pathlib\n"
+        "def test_flaky():\n"
+        "    m = pathlib.Path(__file__).with_name('ran')\n"
+        "    first = not m.exists(); m.write_text('1')\n"
+        "    assert not first\n"
+        "def test_ok():\n    assert True\n")
+    ok, summary = updater.run_tests(tmp_path, sys.executable)
+    assert ok and "retried" in summary
+    (tmp_path / "test_y.py").write_text("def test_broken():\n    assert False\n")
+    ok, summary = updater.run_tests(tmp_path, sys.executable)
+    assert not ok and "test_broken" in summary
