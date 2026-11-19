@@ -9,8 +9,8 @@ Three kinds of source, all free and configured in config/search_queries.yaml:
                Google Jobs (schema.org JSON-LD): title, company, place, exact posting date, full text.
 * json_apis:   remote-job APIs (Arbeitnow, Working Nomads).
 
-Every job still passes the 24-hour rule. A post dated only with today's date (no time) counts
-as today; yesterday's does not.
+Every job still passes the age rule (48 hours). A post dated only with a date (no time) is aged
+from that day's midnight in Nairobi, so today's and yesterday's posts are kept and older ones are not.
 """
 from __future__ import annotations
 
@@ -59,9 +59,11 @@ def age_of(value) -> float | None:
     text = str(value).strip()
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
         now = datetime.now(NAIROBI)
-        if text != now.date().isoformat():
-            return 99.0
-        return (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 3600
+        try:
+            day = datetime.fromisoformat(text).replace(tzinfo=NAIROBI)
+        except ValueError:
+            return None
+        return max(0.0, (now - day).total_seconds() / 3600)  # from that day's midnight: today or yesterday stay within 48h
     try:
         return parse_age_hours(parsedate_to_datetime(text))
     except (TypeError, ValueError, IndexError):
@@ -232,12 +234,12 @@ def fetch(cfg: dict, report: dict | None = None) -> list[dict]:
         return []
 
     def note(name, found, err=None):
-        fresh = sum(1 for j in found if j["age_hours"] is not None and j["age_hours"] <= 24)
+        fresh = sum(1 for j in found if j["age_hours"] is not None and j["age_hours"] <= 48)
         report[name] = (len(found), fresh, err)
         if err:
             log.warning("Source %s failed: %s", name, err)
         else:
-            log.info("Source %s: %d postings (%d from the last 24h)", name, len(found), fresh)
+            log.info("Source %s: %d postings (%d from the last 48h)", name, len(found), fresh)
 
     for f in more.get("rss_feeds", DEFAULT_RSS):
         try:

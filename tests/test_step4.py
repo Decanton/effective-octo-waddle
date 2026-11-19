@@ -132,7 +132,7 @@ def test_auto_send_rules_and_daily_cap(tmp_path):
 
 def test_settings_defaults(tmp_path):
     s = load_settings(tmp_path / "missing.yaml")
-    assert s["auto_submit"]["enabled"] is False and s["email"]["lookback_hours"] == 24
+    assert s["auto_submit"]["enabled"] is False and s["email"]["lookback_hours"] == 48
     real = load_settings()
     assert real["auto_submit"]["max_per_day"] >= 1 and "greenhouse.io" in real["auto_submit"]["only_hosts"]
 

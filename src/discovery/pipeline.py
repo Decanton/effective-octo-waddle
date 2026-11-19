@@ -89,7 +89,7 @@ def run(ws, run_id: int | None = None, sources=("email", "jobspy", "ats", "remot
     def _why(j):
         r = j.get("status_reason") or ""
         if j["status"] == "REJECTED_STALE":
-            return "older than 24 hours" if r.startswith("posted") else r
+            return "older than 48 hours" if r.startswith("posted") else r
         return r.split("'")[0].split("(")[0].strip()
     reasons = Counter((j["status"], _why(j)) for j in ranked if j["status"] != "QUALIFIED")
     export = ws.exports / f"jobs_{datetime.now():%Y-%m-%d_%H%M}.csv"

@@ -854,8 +854,10 @@
     "fit": 0.55,
     "recency": 0.2,
     "low_applicants": 0.25,
-    "max_age_hours": 24,
-    "low_applicant_threshold": 25
+    "max_age_hours": 48,
+    "low_applicant_threshold": 25,
+    "track_bonus": {"ai_data": 0.15},
+    "_track_bonus_rule": "AI training roles go first (Kelly, 2026-11-19)"
   },
   "workspace": {
     "desktop_folder_name": "JobSprintAgent",

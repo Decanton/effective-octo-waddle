@@ -314,10 +314,10 @@ def check_sources(log) -> int:
     for name in cfg.get("remote_boards") or []:
         try:
             found = remote_boards.fetch([name])
-            report[name] = (len(found), sum(1 for j in found if (j["age_hours"] or 99) <= 24), None if found else "nothing returned")
+            report[name] = (len(found), sum(1 for j in found if (j["age_hours"] or 99) <= 48), None if found else "nothing returned")
         except Exception as exc:
             report[name] = (0, 0, str(exc)[:120])
-    print(f"\n{'source':<30} {'postings':>8} {'last 24h':>8}  problem")
+    print(f"\n{'source':<30} {'postings':>8} {'last 48h':>8}  problem")
     for name, (n, fresh, err) in report.items():
         print(f"{name:<30} {n:>8} {fresh:>8}  {err or ''}")
     return 0

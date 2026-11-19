@@ -48,7 +48,7 @@ def _profile_terms(profile: dict, track: str) -> set[str]:
     return {t for t in terms if t not in STOP and len(t) > 1}
 
 
-def explain(job: dict, profile: dict, max_age: float = 24.0) -> dict:
+def explain(job: dict, profile: dict, max_age: float = 48.0) -> dict:
     fit, track = fit_score(job, profile)
     text = f"{job.get('title', '')}\n{job.get('description') or ''}".lower()
     kws = profile["tracks"].get(track, {}).get("keywords", [])

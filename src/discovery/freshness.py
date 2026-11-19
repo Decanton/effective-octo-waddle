@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, time, timedelta, timezone
 
-MAX_AGE_HOURS = 24.0
+MAX_AGE_HOURS = 48.0
 
 _UNIT_HOURS = {
     "second": 1 / 3600, "sec": 1 / 3600, "s": 1 / 3600,

@@ -111,7 +111,7 @@ def fetch(boards=("remotive", "remoteok", "himalayas", "jobicy", "weworkremotely
                     r.raise_for_status()
                     batch = parse_himalayas(r.json())
                     found += batch
-                    if not batch or all((j["age_hours"] or 99) > 24 for j in batch):
+                    if not batch or all((j["age_hours"] or 99) > 48 for j in batch):
                         break
                     time.sleep(1)
             else:
@@ -122,7 +122,7 @@ def fetch(boards=("remotive", "remoteok", "himalayas", "jobicy", "weworkremotely
         except (requests.RequestException, ValueError, ElementTree.ParseError) as exc:
             log.warning("Remote board %s failed: %s", name, exc)
             continue
-        fresh = sum(1 for j in found if j["age_hours"] is not None and j["age_hours"] <= 24)
-        log.info("Remote board %s: %d postings (%d from the last 24h)", name, len(found), fresh)
+        fresh = sum(1 for j in found if j["age_hours"] is not None and j["age_hours"] <= 48)
+        log.info("Remote board %s: %d postings (%d from the last 48h)", name, len(found), fresh)
         jobs += found
     return jobs

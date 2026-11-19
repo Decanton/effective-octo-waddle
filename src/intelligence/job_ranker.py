@@ -55,7 +55,7 @@ def max_age_for(job: dict, search_cfg: dict) -> float:
     """The age limit for this job's source (company boards may allow longer; see search_queries.yaml)."""
     kind = (job.get("source") or "").split(":")[0]
     per = search_cfg.get("max_age_hours_by_source") or {}
-    return float(per.get(kind, search_cfg.get("max_age_hours", 24)))
+    return float(per.get(kind, search_cfg.get("max_age_hours", 48)))
 
 
 def check_job(job: dict, search_cfg: dict, platform_cfg: dict | None = None) -> Verdict:
@@ -113,7 +113,7 @@ def rank(jobs: list[dict], profile: dict, search_cfg: dict, platform_cfg: dict |
     w = profile.get("ranking_weights", {})
     wf, wr, wl = w.get("fit", 0.55), w.get("recency", 0.2), w.get("low_applicants", 0.25)
     thr = int(w.get("low_applicant_threshold", 25))
-    max_age = float(search_cfg.get("max_age_hours", w.get("max_age_hours", 24)))
+    max_age = float(search_cfg.get("max_age_hours", w.get("max_age_hours", 48)))
     out, seen = [], set()
     for j in jobs:
         key = (j["title"].lower().strip(), (j.get("company") or "").lower().strip())
@@ -125,6 +125,7 @@ def rank(jobs: list[dict], profile: dict, search_cfg: dict, platform_cfg: dict |
             seen.add(key)
             fit, track = fit_score(j, profile)
             pri = wf * fit + wr * recency_score(j["age_hours"], max_age_for(j, search_cfg)) + wl * low_applicant_score(j.get("applicant_count"), thr)
+            pri += float((w.get("track_bonus") or {}).get(track, 0.0))  # e.g. AI training roles first
             j.update(track=track, fit_score=fit, priority_score=round(pri, 4))
         out.append(j)
     min_fit = float(w.get("min_fit", 0.30))

@@ -131,3 +131,20 @@ def test_llm_local_only_and_off(monkeypatch):
     assert not llm_client.available()
     with pytest.raises(llm_client.LLMUnavailable):
         llm_client.complete("hi")
+
+
+def test_48h_window_and_ai_training_first():
+    from src.cv_tailor.single_template_tailor import load_profile
+    from src.discovery.common import load_yaml
+    from src.intelligence.job_ranker import rank
+    base = {"location": "Remote", "is_remote": True, "applicant_count": 10, "source": "t"}
+    jobs = [dict(base, title="Backend Python Engineer", company="A", url="a", age_hours=40,
+                 description="Python Django REST APIs PostgreSQL microservices backend"),
+            dict(base, title="AI Trainer - LLM Evaluation", company="B", url="b", age_hours=40,
+                 description="AI training, RLHF, data annotation, LLM evaluation, prompt writing"),
+            dict(base, title="AI Trainer", company="C", url="c", age_hours=49, description="RLHF data annotation")]
+    out = {j["url"]: j for j in rank(jobs, load_profile(), load_yaml("search_queries.yaml"))}
+    assert out["a"]["status"] == out["b"]["status"] == "QUALIFIED" and out["c"]["status"] == "REJECTED_STALE"
+    assert out["b"]["priority_score"] > out["a"]["priority_score"]
+    yday = (datetime.now(mb.NAIROBI) - timedelta(days=1)).date().isoformat()
+    assert 24 <= mb.age_of(yday) <= 48 and mb.age_of((datetime.now(mb.NAIROBI) - timedelta(days=2)).date().isoformat()) > 48

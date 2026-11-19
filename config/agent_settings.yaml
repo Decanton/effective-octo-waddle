@@ -70,7 +70,7 @@ email:
   # Read job alerts and recruiter messages from the inbox in .env (EMAIL_ADDRESS).
   enabled: true
   # Only look at mail from the last N hours (job alerts older than a day are stale anyway).
-  lookback_hours: 24
+  lookback_hours: 48
 
 human_assist:
   # CAPTCHAs and phone (SMS) codes. The agent never solves a CAPTCHA.

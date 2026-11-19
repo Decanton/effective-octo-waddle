@@ -6,7 +6,7 @@ A free, local job application and recruiter email agent for a one-hour daily ses
 | Step | What it adds | Status |
 |---|---|---|
 | 1 | Desktop folder, database, your profile, master CV template, CV tailoring, launchers | Done |
-| 2 | Job discovery (last 24 hours only) and ranking by fit and low applicant count | Done |
+| 2 | Job discovery (last 48 hours) and ranking by fit and low applicant count | Done |
 | 3 | Tailored CV per job, form filling that stops before Submit, review page at http://127.0.0.1:8000 | Done |
 | 4 | Automatic sending (daily cap), sign-in once per site, Gmail job alerts and recruiter reply drafts, daily scheduled run | Done |
 
@@ -31,7 +31,7 @@ Run these from this folder, after the first run, with `.venv\Scripts\python.exe 
 | `run_sprint.py --restage --stage-only` | Tries again the jobs that needed a sign-in or had no form |
 | `run_sprint.py --stage-only --stage-limit 5` | Fills forms for the top 5 qualified jobs, without submitting |
 | `run_sprint.py --review` | Opens the review page at http://127.0.0.1:8000 |
-| `run_sprint.py --discover` | Finds jobs posted in the last 24 hours, ranks them and saves a CSV in `JobSprintAgent\exports` |
+| `run_sprint.py --discover` | Finds jobs posted in the last 48 hours, ranks them and saves a CSV in `JobSprintAgent\exports` |
 | `run_sprint.py --mark-applied AfterQuery` | Marks an AI platform as applied so it stops being listed |
 | `run_sprint.py --check` | Checks your profile and lists screening answers you still need to fill in |
 | `run_sprint.py --sample-cvs` | Rebuilds the four sample CVs |
@@ -39,7 +39,7 @@ Run these from this folder, after the first run, with `.venv\Scripts\python.exe 
 
 ## How jobs are found and ranked
 - **Sources:** free remote-job boards with exact posting times (Remotive, RemoteOK, Himalayas, Jobicy, We Work Remotely), LinkedIn through jobspy (Kenya, plus remote roles worldwide; it stops for the day if LinkedIn starts blocking), and the public Greenhouse, Lever and Ashby boards listed in `config/ai_platforms.yaml`. Edit searches in `config/search_queries.yaml`.
-- **24-hour rule:** enforced in code (`src/discovery/freshness.py`). Undated or older jobs are dropped. LinkedIn searches only return the last 24 hours, and for the best matches the agent opens the public job page to read the exact age and applicant count.
+- **48-hour rule:** enforced in code (`src/discovery/freshness.py`, `max_age_hours` in `config/search_queries.yaml`). Undated or older jobs are dropped. LinkedIn searches only return the last 48 hours, and for the best matches the agent opens the public job page to read the exact age and applicant count. AI training roles get a priority boost (`ranking_weights.track_bonus` in `master_profile.json`).
 - **Knockouts:** titles like Director or Intern, descriptions requiring US citizenship or clearance, onsite jobs outside Kenya, and remote jobs restricted to the US, UK or EU.
 - **Ranking:** 55% fit with your profile, 20% how recent, 25% how few applicants. An unknown applicant count is neutral. Weights live in `master_profile.json` under `ranking_weights`.
 - **AI platforms** with no dated postings (AfterQuery, Outlier, Alignerr, DataAnnotation, Mercor) are listed each run until you mark them applied.
@@ -72,7 +72,7 @@ The agent uses your installed Google Chrome with its own profile (`JobSprintAgen
 After that, whenever a site asks for an account, the agent clicks its **Continue with Google** button and picks your account by itself (`google_sign_in` in `config/agent_settings.yaml`). If Google asks for a password or a phone prompt, the job waits for you as **sign in once**.
 
 ## Email
-With `EMAIL_ADDRESS` and `EMAIL_APP_PASSWORD` in `.env`, each run reads the last 24 hours of the inbox. It opens the inbox read-only, so nothing is marked read or moved.
+With `EMAIL_ADDRESS` and `EMAIL_APP_PASSWORD` in `.env`, each run reads the last 48 hours of the inbox. It opens the inbox read-only, so nothing is marked read or moved.
 - **Job alerts** (LinkedIn, Indeed, Glassdoor, Himalayas, BrighterMonday and others) become jobs in the normal list.
 - **Recruiter emails** show on the **Recruiter emails** tab with a draft reply. Replies go out only when you press **Send reply**.
 

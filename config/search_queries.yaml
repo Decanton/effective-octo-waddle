@@ -1,5 +1,5 @@
 # What to search for. Edit freely; the agent reads this every run.
-max_age_hours: 24            # strict: older or undated jobs are dropped
+max_age_hours: 48            # older or undated jobs are dropped (Kelly widened this to 48h on 2026-11-19)
 
 # Optional longer limits for company job boards, whose forms the agent can fill.
 # Example: {greenhouse: 72, lever: 72, ashby: 72}. Empty means 24 hours everywhere.

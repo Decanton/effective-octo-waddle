@@ -38,7 +38,7 @@ def test_bare_dates_need_source_side_filter():
 
 
 def test_is_fresh_strict():
-    assert is_fresh(0) and is_fresh(24) and not is_fresh(24.01) and not is_fresh(None)
+    assert is_fresh(0) and is_fresh(48) and not is_fresh(48.01) and not is_fresh(None)
 
 
 @pytest.mark.parametrize("text,n", [
@@ -87,7 +87,7 @@ def test_rank_rules_and_order():
     jobs = [
         _job(title="LLM Evaluator", applicant_count=300, url="u1"),
         _job(title="AI Trainer (Python)", applicant_count=8, url="u2"),
-        _job(title="AI Trainer stale", age_hours=30, url="u3"),
+        _job(title="AI Trainer stale", age_hours=50, url="u3"),
         _job(title="AI Trainer undated", age_hours=None, url="u4"),
         _job(title="Director of AI", url="u5"),
         _job(title="Prompt Engineer", description="Must be a US citizen. LLM work.", url="u6"),
