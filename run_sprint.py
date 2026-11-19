@@ -1,0 +1,152 @@
+"""Job Sprint Agent: main entry point.
+
+  python run_sprint.py              daily sprint (for now: setup + checks + sample CVs)
+  python run_sprint.py --setup      create the Desktop folder and database only
+  python run_sprint.py --check      check your profile and settings
+  python run_sprint.py --sample-cvs build one sample CV per track to review the layout
+  python run_sprint.py --cv-for FILE  build a tailored CV for a job description saved in FILE
+
+Coming in later steps: --stage-only (step 2/3), --login-setup (step 3), --email-only (step 4).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+
+from src import database as db  # noqa: E402
+from src.workspace import ensure_workspace  # noqa: E402
+
+PLANNED = {
+    "stage_only": "Job discovery and form staging arrive in steps 2 and 3 of the plan.",
+    "login_setup": "Browser login setup arrives in step 3 of the plan.",
+    "email_only": "Inbox scanning and recruiter replies arrive in step 4 of the plan.",
+}
+
+
+def _load_env() -> None:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(ROOT / ".env")
+    except ImportError:
+        pass
+
+
+def _logger(ws) -> logging.Logger:
+    log = logging.getLogger("jobsprint")
+    if not log.handlers:
+        log.setLevel(logging.INFO)
+        fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S")
+        fh = logging.FileHandler(ws.logs / f"sprint_{datetime.now():%Y-%m-%d}.log", encoding="utf-8")
+        sh = logging.StreamHandler(sys.stdout)
+        for h in (fh, sh):
+            h.setFormatter(fmt)
+            log.addHandler(h)
+    return log
+
+
+def setup():
+    ws = ensure_workspace()
+    db.init_db(ws.db_path)
+    from resumes.build_master_template import TEMPLATE_PATH, build
+    if not TEMPLATE_PATH.exists():
+        build(TEMPLATE_PATH)
+    return ws
+
+
+def check(log) -> int:
+    """Validate the profile and settings. Returns the number of problems."""
+    from src.cv_tailor.single_template_tailor import TRACKS, load_profile
+    problems = 0
+    try:
+        profile = load_profile()
+    except (OSError, json.JSONDecodeError) as exc:
+        log.error("config/master_profile.json could not be read: %s", exc)
+        return 1
+    for key in ("full_name", "email", "phone", "location"):
+        if not profile["personal"].get(key):
+            log.error("Profile is missing personal.%s", key)
+            problems += 1
+    for t in TRACKS:
+        if t not in profile["summaries"] or t not in profile["skills"]:
+            log.error("Profile is missing the summary or skills for track %s", t)
+            problems += 1
+    missing = [k for k, v in profile["screening_answers"].items() if v is None and not k.startswith("_")]
+    if missing:
+        log.warning("These screening answers are empty, so forms asking them will be flagged "
+                    "NEEDS_USER_INPUT: %s", ", ".join(missing))
+    if not (ROOT / ".env").exists():
+        log.warning("No .env file yet. Copy .env.example to .env before steps 3 and 4.")
+    log.info("Profile check finished with %d problem(s).", problems)
+    return problems
+
+
+def sample_cvs(ws, log) -> list[Path]:
+    from src.cv_tailor.single_template_tailor import TRACKS, build_cv
+    out = []
+    for t in TRACKS:
+        path, cv = build_cv("", ws.tailored_cvs / "_samples" / f"Dickens_Owuor_{t}.docx", track=t)
+        log.info("Sample CV (%s): %s", t, path)
+        out.append(path)
+    return out
+
+
+def cv_for(ws, log, job_file: Path) -> Path:
+    from src.cv_tailor.single_template_tailor import build_cv
+    text = Path(job_file).read_text(encoding="utf-8", errors="ignore")
+    path, cv = build_cv(text, ws.tailored_cvs / f"{Path(job_file).stem}.docx")
+    log.info("Tailored CV (%s track) written to %s", cv.track, path)
+    log.info("Matched keywords: %s", ", ".join(cv.matched_keywords[:25]) or "none")
+    return path
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="Local job application and recruiter email agent")
+    ap.add_argument("--setup", action="store_true")
+    ap.add_argument("--check", action="store_true")
+    ap.add_argument("--sample-cvs", action="store_true")
+    ap.add_argument("--cv-for", type=Path, metavar="FILE")
+    ap.add_argument("--stage-only", action="store_true")
+    ap.add_argument("--login-setup", action="store_true")
+    ap.add_argument("--email-only", action="store_true")
+    args = ap.parse_args(argv)
+    _load_env()
+
+    for flag, msg in PLANNED.items():
+        if getattr(args, flag):
+            print(msg)
+            return 0
+
+    ws = setup()
+    log = _logger(ws)
+    log.info("Workspace ready at %s", ws.root)
+    if args.setup:
+        return 0
+    if args.check:
+        return 1 if check(log) else 0
+    if args.sample_cvs:
+        sample_cvs(ws, log)
+        return 0
+    if args.cv_for:
+        cv_for(ws, log, args.cv_for)
+        return 0
+
+    # Daily sprint. For now (step 1) it prepares everything and builds sample CVs.
+    with db.session(ws.db_path) as conn:
+        run_id = db.start_run(conn, "sprint")
+    problems = check(log)
+    paths = sample_cvs(ws, log) if not problems else []
+    with db.session(ws.db_path) as conn:
+        db.finish_run(conn, run_id, notes=f"step1: {len(paths)} sample CVs, {problems} profile problems")
+    log.info("Done. Open %s to see the sample CVs.", ws.tailored_cvs / "_samples")
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,295 @@
+{
+  "_about": "Single source of verified facts. Everything here was copied from Kelly's four CV versions (AI Data Specialist, Software, Mechanical, General). The agent may reorder, select and emphasise these facts, but must never invent new ones. Any value set to null is unknown: the agent flags a question as NEEDS_USER_INPUT instead of guessing.",
+
+  "personal": {
+    "full_name": "Dickens Owuor",
+    "first_name": "Dickens",
+    "last_name": "Owuor",
+    "email": "owuordickens0001@gmail.com",
+    "phone": "+254 706 921 015",
+    "city": "Nairobi",
+    "country": "Kenya",
+    "location": "Nairobi, Kenya",
+    "linkedin": "https://www.linkedin.com/in/dickens-owuor",
+    "github": "https://github.com/Decanton",
+    "portfolio": null
+  },
+
+  "tracks": {
+    "ai_data": {
+      "label": "AI Data Specialist",
+      "headline": "AI Data Specialist | LLM Evaluation | Prompt Engineering | Code & STEM Content | Data Annotation",
+      "keywords": ["llm", "ai trainer", "ai training", "annotation", "annotator", "data labeling", "labeling", "evaluation", "evaluator", "rlhf", "prompt", "prompt engineering", "red team", "ai tutor", "expert contributor", "ai data", "data specialist", "rater", "fact-check", "stem", "code review", "afterquery", "outlier", "mercor", "alignerr", "dataannotation", "snorkel", "lidar", "computer vision", "nlp"]
+    },
+    "software": {
+      "label": "Software Engineer",
+      "headline": "Software Engineer | Backend Development | Systems Integration | Python | Oracle PL/SQL",
+      "keywords": ["software engineer", "backend", "back-end", "back end", "developer", "python", "django", "flask", "node", "express", "api", "rest", "microservices", "integration", "hl7", "astm", "oracle", "pl/sql", "sql", "database", "full stack", "full-stack", "react", "mern", "devops", "bpm", "newgen", "data analyst", "data engineer"]
+    },
+    "mechanical": {
+      "label": "Mechanical Engineer",
+      "headline": "Mechanical Engineer | CAD | Finite Element Analysis (FEA) | Maintenance & Reliability",
+      "keywords": ["mechanical", "mechanical engineer", "cad", "autocad", "solidworks", "fea", "finite element", "structural", "maintenance", "reliability", "design engineer", "manufacturing", "thermodynamics", "machining", "graduate engineer", "plant engineer"]
+    },
+    "general": {
+      "label": "Mechanical and Software Engineer | AI Data Specialist",
+      "headline": "Mechanical and Software Engineer | AI Data Specialist",
+      "keywords": []
+    }
+  },
+
+  "summaries": {
+    "ai_data": "AI Data Specialist with four years of experience training and evaluating Large Language Models (LLMs) at Snorkel AI, RWS / Meta AI, Outlier and Remotask. Delivers expert-level code evaluation, mathematical reasoning, engineering content, prompt engineering and multimodal annotation (text, video, image, 3D / LiDAR), consistently ranking among high-performing contributors. Combines a BSc in Mechanical Engineering with software engineering practice, now as a Backend and Systems Integration Engineer at talQen, so can judge technical correctness as well as guideline compliance. Strong on annotation consistency, Quality Assurance (QA) and mentoring annotators across high-volume pipelines.",
+    "software": "Software Engineer specializing in backend development and systems integration, currently building microservices and ASTM E1394 / Health Level Seven (HL7) v2 analyzer drivers at talQen. Previously a Full-Stack and Oracle Developer at Radia Pearlman Technologies, delivering Python, Node.js and Oracle Procedural Language/SQL (PL/SQL) solutions, NewGen Business Process Management (BPM) workflow automation and Representational State Transfer (REST) Application Programming Interfaces (APIs) for enterprise clients. Holds a Software Engineering (Backend Specialty) certification from ALX Africa – Holberton and a BSc in Mechanical Engineering, with experience in Agile teams, SQL performance tuning, networking, data analysis and clear technical documentation. Also has four years of experience evaluating and creating code and STEM content for AI model training.",
+    "mechanical": "Mechanical Engineer with a Bachelor of Science (BSc) in Mechanical Engineering from the University of Nairobi and registered membership of the Engineers Board of Kenya (EBK). Experienced in Computer-Aided Design (CAD) modelling with AutoCAD and SolidWorks, Finite Element Analysis (FEA), structural design, preventive maintenance and root-cause troubleshooting from a mechanical engineering internship at Numerical Machining Complex, and from an electric vehicle dashboard capstone. Produces clear engineering reports and technical documentation. Adds Python, Structured Query Language (SQL) and laboratory instrument-integration skills from current engineering work at talQen, and has contributed mechanical analysis, thermodynamics and structural problem content to AI model training.",
+    "general": "Mechanical and Software Engineer and AI Data Specialist with a Bachelor of Science (BSc) in Mechanical Engineering from the University of Nairobi and registered membership of the Engineers Board of Kenya (EBK). Currently builds backend microservices and ASTM E1394 / Health Level Seven (HL7) v2 analyzer integrations at talQen, with four years of experience training and evaluating Large Language Models (LLMs), prior Oracle and full-stack development experience at Radia Pearlman Technologies, and Computer-Aided Design (CAD) and Finite Element Analysis (FEA) skills from a mechanical engineering internship."
+  },
+
+  "experience": [
+    {
+      "id": "talqen",
+      "title": "Backend & Systems Integration Engineer",
+      "company": "talQen™",
+      "location": "Nairobi, Kenya",
+      "start": "09/2026",
+      "end": "Present",
+      "tracks": ["software", "ai_data", "mechanical", "general"],
+      "bullets": [
+        {"text": "Enabled bidirectional data flow between three clinical analyzer models (HumaCount 5D, HumaStar 100, SweeLab) and host Laboratory Information System (LIS) applications by engineering ASTM E1394 and Health Level Seven (HL7) v2 communication drivers.", "tracks": ["software", "ai_data", "mechanical", "general"]},
+        {"text": "Developed backend microservices for a continuous laboratory Quality Management System (QMS) platform aligned with ISO 15189:2022 and Kenya Office of the Data Protection Commissioner (ODPC) regulations.", "tracks": ["software", "ai_data", "mechanical", "general"]},
+        {"text": "Automated Quality Control (QC) monitoring by designing data ingestion modules that parse real-time analyzer output and trigger statistical alerts based on Westgard rules.", "tracks": ["software", "ai_data", "mechanical", "general"]},
+        {"text": "Onboarded pilot medical laboratories on-site and remotely by configuring static IP subnets, switch routing, TCP listener ports and local firewall rules, ensuring dual-path internet and device connectivity.", "tracks": ["software"]},
+        {"text": "Restored stable multi-analyzer connectivity by resolving cryptographic token, sender key and network socket reconnection issues in bridging middleware.", "tracks": ["software"]}
+      ]
+    },
+    {
+      "id": "rws_meta",
+      "title": "AI Data Specialist",
+      "company": "RWS Group | Meta AI (Unicorn Project)",
+      "location": "Remote",
+      "start": "2025",
+      "end": "Present",
+      "tracks": ["ai_data", "general"],
+      "bullets": [
+        {"text": "Aligned generative AI models with audio and contextual cues by performing video and text annotation and pairwise evaluations of avatar behaviors for Meta AI research.", "tracks": ["ai_data", "general"]},
+        {"text": "Maintained annotation consistency and accuracy across high-volume pipelines by following detailed project guidelines.", "tracks": ["ai_data"]},
+        {"text": "Improved training data quality for large-scale generative AI models by refining annotation standards with global teams while managing several concurrent projects.", "tracks": ["ai_data"]}
+      ]
+    },
+    {
+      "id": "snorkel",
+      "title": "Expert Contributor & AI Training Specialist",
+      "company": "Snorkel AI",
+      "location": "Remote",
+      "start": "01/2026",
+      "end": "06/2026",
+      "tracks": ["ai_data", "software", "mechanical", "general"],
+      "bullets": [
+        {"text": "Improved Large Language Model (LLM) code-generation accuracy across technical domains by evaluating and ranking AI-generated Python, SQL and algorithm outputs for correctness, efficiency and best practice.", "tracks": ["ai_data", "software", "mechanical", "general"]},
+        {"text": "Strengthened Science, Technology, Engineering and Mathematics (STEM) reasoning in frontier models by delivering advanced mathematics and engineering content, including mechanical analysis, thermodynamics and structural problems.", "tracks": ["ai_data", "mechanical", "general"]},
+        {"text": "Scaled training-data quality for production AI systems by contributing to data programming workflows with Snorkel labeling functions and programmatic supervision.", "tracks": ["ai_data", "software"]},
+        {"text": "Provided high-quality Python, SQL and algorithm solutions to train and evaluate large-scale AI code-generation models.", "tracks": ["ai_data", "software"]}
+      ]
+    },
+    {
+      "id": "radia",
+      "title": "Full-Stack Engineer | Oracle Developer",
+      "company": "Radia Pearlman Technologies",
+      "location": "Nairobi, Kenya",
+      "start": "01/2025",
+      "end": "02/2026",
+      "tracks": ["software", "ai_data", "mechanical", "general"],
+      "bullets": [
+        {"text": "Led backend engineering across multiple enterprise projects by building and maintaining server-side systems in Python (Django, Flask) and Node.js (Express) covering business logic, authentication, session management and database integration.", "tracks": ["software"]},
+        {"text": "Maintained data integrity and performance by designing and maintaining Oracle database schemas with referential integrity, normalization and optimal indexing.", "tracks": ["software"]},
+        {"text": "Automated enterprise data pipelines and enforced business rules by designing Oracle schemas and Procedural Language/SQL (PL/SQL) stored procedures, functions, triggers and packages.", "tracks": ["software"]},
+        {"text": "Cut critical query response times by up to 40% on high-volume datasets by optimizing Structured Query Language (SQL) with EXPLAIN PLAN, SQL Trace and DBMS_STATS; reduced one reporting query from 8 seconds to under 1 second through index redesign and BULK COLLECT / FORALL.", "tracks": ["software", "ai_data", "general"]},
+        {"text": "Enabled front-end and third-party integrations by designing, building and documenting RESTful APIs with OpenAPI/Swagger specifications, and delivered responsive React and MERN web applications for data-intensive enterprise clients.", "tracks": ["software"]},
+        {"text": "Reduced a client's document approval cycle by 60% (5 manual steps to 2) by configuring NewGen Business Process Management (BPM) workflows and integrating them with Oracle back ends over Representational State Transfer (REST) Application Programming Interfaces (APIs).", "tracks": ["software", "mechanical", "general"]},
+        {"text": "Decreased manual reporting effort by 50% across three industry verticals by building a Flask and Oracle analytics platform with real-time dashboards; reduced manual data reconciliation effort by about 35% for a financial services client with an Oracle automation solution.", "tracks": ["software", "mechanical", "general"]},
+        {"text": "Surfaced actionable insights for client decision-making by delivering exploratory data analysis (EDA), statistical modelling and dashboards in Python (Pandas, NumPy, Matplotlib), Excel and SQL.", "tracks": ["software", "ai_data"]},
+        {"text": "Reduced onboarding time for new team members by producing architecture diagrams, API reference guides, database data dictionaries and developer onboarding manuals; delivered work in Agile sprints with code reviews and Git branching.", "tracks": ["software", "ai_data", "mechanical"]}
+      ]
+    },
+    {
+      "id": "outlier",
+      "title": "AI Trainer & LLM Evaluator",
+      "company": "Outlier",
+      "location": "Remote",
+      "start": "2024",
+      "end": "2025",
+      "tracks": ["ai_data", "general"],
+      "bullets": [
+        {"text": "Improved LLM accuracy and safety across software engineering, mathematics and science by providing data annotation, evaluation and prompt engineering.", "tracks": ["ai_data", "general"]},
+        {"text": "Raised model accuracy on technical and STEM content by conducting linguistic, reasoning and fact-checking tasks, and supported conversational AI alignment with ethical AI standards.", "tracks": ["ai_data"]},
+        {"text": "Earned repeated project assignments by delivering top-tier quality outputs and ranking among high-performing contributors across evaluation cycles.", "tracks": ["ai_data"]}
+      ]
+    },
+    {
+      "id": "sparksmatrix",
+      "title": "Customer Lead & Digital Marketing Specialist",
+      "company": "Sparksmatrix",
+      "location": "Nairobi, Kenya",
+      "start": "12/2024",
+      "end": "06/2025",
+      "tracks": ["general"],
+      "bullets": [
+        {"text": "Increased response rates by 25% by using Customer Relationship Management (CRM) tools to track interactions, segment audiences and personalize outreach.", "tracks": ["general"]}
+      ]
+    },
+    {
+      "id": "nmc",
+      "title": "Mechanical Engineering Intern",
+      "company": "Numerical Machining Complex (NMC)",
+      "location": "Nairobi, Kenya",
+      "start": "2024",
+      "end": "2024",
+      "tracks": ["mechanical", "ai_data", "software", "general"],
+      "bullets": [
+        {"text": "Achieved ±0.05 mm dimensional accuracy by modelling industrial components in AutoCAD and SolidWorks.", "tracks": ["mechanical", "ai_data", "software", "general"]},
+        {"text": "Validated structural integrity and improved product safety before manufacture by conducting Finite Element Analysis (FEA) and mechanical simulations.", "tracks": ["mechanical", "ai_data", "software", "general"]},
+        {"text": "Contributed to a 15% reduction in unplanned downtime by supporting preventive maintenance schedules and root-cause troubleshooting.", "tracks": ["mechanical", "software", "general"]},
+        {"text": "Enabled compliance audits and inter-departmental knowledge transfer by preparing detailed engineering reports and technical documentation.", "tracks": ["mechanical"]}
+      ]
+    },
+    {
+      "id": "remotask",
+      "title": "AI/ML Data Labeling Specialist",
+      "company": "Remotask",
+      "location": "Remote",
+      "start": "2022",
+      "end": "2024",
+      "tracks": ["ai_data", "general"],
+      "bullets": [
+        {"text": "Supported autonomous driving, computer vision and Natural Language Processing (NLP) models by labeling image, text and 3D data across diverse AI/ML projects.", "tracks": ["ai_data", "general"]},
+        {"text": "Built training datasets at scale by specializing in autonomous driving Light Detection and Ranging (LiDAR) annotation, NLP dataset construction and structured data labeling.", "tracks": ["ai_data"]},
+        {"text": "Protected data integrity across client projects by conducting Quality Assurance (QA) and peer reviews.", "tracks": ["ai_data"]},
+        {"text": "Improved team throughput and annotation quality by training and mentoring new annotators.", "tracks": ["ai_data"]}
+      ]
+    }
+  ],
+
+  "education": [
+    {
+      "id": "uon",
+      "qualification": "Bachelor of Science (BSc), Mechanical Engineering",
+      "institution": "University of Nairobi",
+      "location": "Nairobi, Kenya",
+      "start": "09/2019",
+      "end": "09/2024",
+      "details": [
+        {"text": "Capstone: Electric Vehicle Dashboard Design, an ergonomic dashboard with optimized material selection in AutoCAD and SolidWorks, validated through FEA simulations.", "tracks": ["mechanical", "general"]},
+        {"text": "Innovation project: Eco-Efficient Low-Flush Toilet Design.", "tracks": ["mechanical", "general"]}
+      ]
+    },
+    {
+      "id": "alx_se",
+      "qualification": "Certification in Software Engineering (Backend Specialty)",
+      "institution": "ALX Africa – Holberton",
+      "location": "Kenya",
+      "start": "01/2023",
+      "end": "03/2024",
+      "details": [
+        {"text": "Built a Unix shell from scratch in C (command parsing, I/O redirection, process management) and an Airbnb Command-Line Interface (CLI) clone in object-oriented Python with design patterns and unit tests.", "tracks": ["software"]}
+      ]
+    },
+    {
+      "id": "alx_ds",
+      "qualification": "Certification in Data Science",
+      "institution": "ALX Africa – Holberton",
+      "location": "Kenya",
+      "start": "03/2025",
+      "end": "Completed",
+      "details": []
+    },
+    {
+      "id": "denaco",
+      "qualification": "Certificate in Data Analytics",
+      "institution": "Denaco School",
+      "location": "Nairobi, Kenya",
+      "start": "01/2024",
+      "end": "06/2024",
+      "details": []
+    }
+  ],
+
+  "education_order": {
+    "software": ["alx_se", "uon", "alx_ds", "denaco"],
+    "ai_data": ["uon", "alx_ds", "alx_se", "denaco"],
+    "mechanical": ["uon", "alx_se", "alx_ds", "denaco"],
+    "general": ["uon", "alx_se", "alx_ds", "denaco"]
+  },
+
+  "skills": {
+    "ai_data": [
+      {"group": "LLM Training and Evaluation", "items": ["LLM Evaluation and Ranking", "Alignment and Safety", "Prompt Engineering", "Fact-Checking", "Pairwise Comparison"]},
+      {"group": "Technical Content", "items": ["Code Evaluation (Python, SQL, Algorithms)", "Mathematical Reasoning", "Mechanical and Engineering Problems", "Thermodynamics", "STEM Content Creation"]},
+      {"group": "Data Annotation and QA", "items": ["Video, Text, Image and 3D / LiDAR Annotation", "NLP Dataset Construction", "Autonomous Driving Data", "Peer Review", "Guideline Adherence", "Annotator Mentoring"]},
+      {"group": "Tools", "items": ["Snorkel Labeling Functions", "Programmatic Supervision", "Python (Pandas, NumPy)", "SQL", "Excel", "Git"]}
+    ],
+    "software": [
+      {"group": "Backend and APIs", "items": ["Python (Django, Flask)", "Node.js (Express)", "Microservices", "RESTful APIs", "OpenAPI/Swagger", "Authentication", "Session Management", "Postman"]},
+      {"group": "Systems Integration", "items": ["HL7 v2", "ASTM E1394", "TCP/IP Socket Communication", "Network Configuration (Subnets, Routing, Firewalls)", "Middleware", "Real-Time Data Ingestion"]},
+      {"group": "Databases", "items": ["Oracle 12c/19c", "PL/SQL (Procedures, Functions, Triggers, Packages)", "SQL Performance Tuning", "Schema Design", "MySQL", "PostgreSQL"]},
+      {"group": "Frontend and Full-Stack", "items": ["JavaScript", "React", "MERN Stack", "HTML/CSS", "JSON", "AJAX", "Figma"]},
+      {"group": "Process Automation", "items": ["NewGen BPM Workflow Configuration", "Form and Rule Engines", "Enterprise Integration via REST APIs"]},
+      {"group": "Data and Tools", "items": ["Pandas", "NumPy", "Matplotlib", "Exploratory Data Analysis (EDA)", "Excel", "Git", "GitHub", "JIRA", "Confluence", "Agile/Scrum", "C", "Shell Scripting"]}
+    ],
+    "mechanical": [
+      {"group": "Design and Analysis", "items": ["Computer-Aided Design (CAD)", "AutoCAD", "SolidWorks", "3D Part Modelling", "Technical Drawing", "Tolerancing (±0.05 mm)", "Material Selection", "Finite Element Analysis (FEA)", "Structural Analysis", "Mechanical Simulation", "Thermodynamics", "Design Validation"]},
+      {"group": "Maintenance and Reliability", "items": ["Preventive Maintenance Scheduling", "Root-Cause Troubleshooting", "Downtime Reduction"]},
+      {"group": "Engineering Practice", "items": ["Engineering Reports", "Technical Documentation", "Compliance Audits", "Cross-Department Collaboration", "Agile/Scrum"]},
+      {"group": "Supporting Technical Skills", "items": ["Python (NumPy, Pandas, Matplotlib)", "SQL", "Advanced Excel", "HL7 and ASTM Instrument Interfacing", "Git", "Figma"]}
+    ],
+    "general": [
+      {"group": "Software and Systems", "items": ["Python (Django, Flask)", "Node.js", "Microservices", "REST APIs", "HL7 v2", "ASTM E1394", "Networking", "Oracle PL/SQL", "SQL", "React", "MERN", "NewGen BPM", "Git", "Agile/Scrum"]},
+      {"group": "AI and Data", "items": ["LLM Evaluation", "Prompt Engineering", "Data Annotation", "Code Review", "Quality Assurance (QA)", "STEM Content Creation", "Snorkel", "Pandas"]},
+      {"group": "Mechanical Engineering", "items": ["AutoCAD", "SolidWorks", "FEA", "Structural Analysis", "Technical Drawing", "Preventive Maintenance", "Root-Cause Troubleshooting"]}
+    ]
+  },
+
+  "certifications": [
+    {"text": "Registered Member, Engineers Board of Kenya (EBK)", "tracks": ["software", "mechanical", "general"]},
+    {"text": "Member, Mechanical Engineering Alumni Chapter, University of Nairobi", "tracks": ["mechanical"]},
+    {"text": "Software Engineering (Backend Specialty), ALX Africa – Holberton", "tracks": ["software", "ai_data", "mechanical", "general"]},
+    {"text": "Data Science, ALX Africa – Holberton", "tracks": ["software", "ai_data", "mechanical", "general"]},
+    {"text": "Data Analytics, ALX Fellowship", "tracks": ["software", "ai_data", "mechanical", "general"]},
+    {"text": "Oracle SQL and PL/SQL Development Certification, Udemy", "tracks": ["software", "ai_data", "mechanical", "general"]},
+    {"text": "Oracle Database SQL Associate, Oracle (In Preparation)", "tracks": ["software", "ai_data", "mechanical"]},
+    {"text": "UX/UI Design, IBM SkillsBuild", "tracks": ["software", "ai_data", "mechanical", "general"]}
+  ],
+
+  "screening_answers": {
+    "_about": "Standard answers for application forms. null means unknown: fill these in yourself. The agent never guesses them.",
+    "years_of_experience_total": 4,
+    "years_of_experience_ai_training": 4,
+    "highest_education": "Bachelor's degree",
+    "degree_field": "Mechanical Engineering",
+    "willing_to_work_remotely": true,
+    "current_location": "Nairobi, Kenya",
+    "authorized_to_work_in_kenya": null,
+    "requires_visa_sponsorship_outside_kenya": null,
+    "willing_to_relocate": null,
+    "notice_period": null,
+    "earliest_start_date": null,
+    "expected_salary_monthly_kes": null,
+    "expected_hourly_rate_usd": null,
+    "gender": null,
+    "how_did_you_hear": "Online job board",
+    "languages": null,
+    "has_drivers_license": null
+  },
+
+  "ranking_weights": {
+    "fit": 0.55,
+    "recency": 0.20,
+    "low_applicants": 0.25,
+    "max_age_hours": 24,
+    "low_applicant_threshold": 25
+  },
+
+  "workspace": {
+    "desktop_folder_name": "JobSprintAgent",
+    "daily_stage_target": 20
+  }
+}

@@ -1,0 +1,4 @@
+# Step 1 (base setup and CV tailoring). Later steps add discovery, browser and web UI packages.
+python-docx==1.1.2
+python-dotenv==1.0.1
+PyYAML==6.0.2
