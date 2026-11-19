@@ -272,3 +272,22 @@ def test_auto_send_handles_email_applications_with_own_cap(tmp_path):
     s["auto_submit"].update(enabled=True, max_per_day=5)
     auto_submitter.run(ws, s, submit_fn=fake_submit)
     assert calls == [e1, f1] and e2 not in calls
+
+
+def test_alert_card_gives_title_company_and_place():
+    html = """<a href="https://www.linkedin.com/comm/jobs/view/4099999999/?t=1"><table><tr><td>Data Acquisition Engineer</td></tr>
+              <tr><td>SPIRO · Nairobi (On-site)</td></tr></table></a>
+              <a href="https://www.linkedin.com/comm/jobs/view/4088888888/"><p>AI Data Specialist</p><p>RWS</p><p>Kenya (Remote)</p></a>"""
+    m = imap_scanner.parse_message(_raw("LinkedIn <jobalerts-noreply@linkedin.com>", "New jobs for you", html), now=_now())
+    jobs = {j["title"]: j for j in imap_scanner.alert_jobs(m)}
+    assert jobs["Data Acquisition Engineer"]["company"] == "SPIRO" and jobs["Data Acquisition Engineer"]["location"] == "Nairobi (On-site)"
+    assert jobs["AI Data Specialist"]["company"] == "RWS" and jobs["AI Data Specialist"]["is_remote"]
+
+
+def test_linkedin_page_fills_company_and_location():
+    from src.discovery.jobspy_fetcher import parse_linkedin_job_html
+    html = """<h1 class="top-card-layout__title">Data Engineer</h1><a class="topcard__org-name-link">Acme Ltd</a>
+              <span class="topcard__flavor--bullet">Nairobi, Kenya</span><span class="posted-time-ago__text">3 hours ago</span>"""
+    out = parse_linkedin_job_html(html, {"title": "x", "company": None})
+    assert out["company"] == "Acme Ltd" and out["location"] == "Nairobi, Kenya" and out["age_hours"] == 3
+    assert "company" not in parse_linkedin_job_html(html, {"company": "Known"})

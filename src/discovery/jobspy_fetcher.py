@@ -122,6 +122,15 @@ def parse_linkedin_job_html(html: str, job: dict | None = None) -> dict:
         n = parse_applicants(a.get_text(" ", strip=True) if hasattr(a, "get_text") else str(a))
         if n is not None:
             out["applicant_count"] = n
+    # Jobs from alert emails arrive with only a title; take company, place and title from the page.
+    if not (job or {}).get("company"):
+        for key, sel in (("company", ".topcard__org-name-link, .top-card-layout__second-subline a"),
+                         ("location", ".topcard__flavor--bullet"), ("title", ".top-card-layout__title, .topcard__title")):
+            el = soup.select_one(sel)
+            if el is not None and el.get_text(strip=True):
+                out[key] = " ".join(el.get_text(" ", strip=True).split())
+        if out.get("location") and re.search(r"\bremote\b", out["location"], re.I):
+            out["is_remote"] = True
     if not (job or {}).get("description"):
         d = soup.select_one(".show-more-less-html__markup") or soup.select_one(".description__text")
         if d is not None:

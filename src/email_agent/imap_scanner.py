@@ -135,7 +135,7 @@ def category(m: dict) -> str:
 def alert_jobs(m: dict) -> list[dict]:
     """Job links in an alert email, with the link text as the title."""
     soup = BeautifulSoup(m["html"] or "", "html.parser")
-    links = [(a.get("href") or "", a.get_text(" ", strip=True)) for a in soup.find_all("a")]
+    links = [(a.get("href") or "", a.get_text("\n", strip=True)) for a in soup.find_all("a")]
     if not links:
         links = [(u, "") for u in re.findall(r"https?://\S+", m["text"])]
     sender = m["from_addr"].split("@")[-1]
@@ -145,15 +145,23 @@ def alert_jobs(m: dict) -> list[dict]:
         if not JOB_LINK.search(real):
             continue
         url = _clean_url(real)
-        title = " ".join(text.split())
+        # Alert cards put title, company and place on separate lines inside one link.
+        parts = [" ".join(x.split()) for x in text.split("\n") if x.strip()]
+        parts = [x for x in parts if not re.fullmatch(r"(new|promoted|actively recruiting|easy apply|\d+ (connections?|alumni).*|·)", x, re.I)]
+        title = parts[0] if parts else ""
+        company = parts[1] if len(parts) > 1 and len(parts[1]) < 80 else None
+        location = parts[2] if len(parts) > 2 and len(parts[2]) < 80 else None
+        if company and " · " in company:
+            company, _, location = company.partition(" · ")
         if url in seen:
-            if title and len(title) > len(seen[url]["title"] or "") and len(title) < 120:
-                seen[url]["title"] = title
+            if title and seen[url]["title"] == "Job from alert email" and len(title) < 120:
+                seen[url].update(title=title, company=company or seen[url]["company"], location=location or seen[url]["location"])
             continue
         if re.fullmatch(r"(view|apply|see|more|view job|apply now|see all jobs?|view all jobs?)?", title, re.I):
-            title = ""
+            title, company, location = "", None, None
         job = new_job(source=f"email:{sender}", external_id=url.rsplit("/", 1)[-1], url=url,
-                      title=title[:120] or "Job from alert email", age_hours=m["age_hours"],
+                      title=title[:120] or "Job from alert email", company=company, location=location,
+                      age_hours=m["age_hours"],
                       posted_at=m["received_at"], description="")
         seen[url] = job
         out.append(job)
