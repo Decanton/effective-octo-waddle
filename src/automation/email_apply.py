@@ -30,10 +30,15 @@ log = logging.getLogger("jobsprint")
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 APPLY_WORDS = re.compile(r"\b(send|e-?mail|submit|forward|apply|applications?|address(ed)?)\b", re.I)
 DOC_WORDS = re.compile(r"\b(cv|c\.v\.|resume|résumé|curriculum vitae|cover(ing)? letter|application|applications|documents)\b", re.I)
-BAD_LOCAL = re.compile(r"^(no-?reply|do-?not-?reply|privacy|gdpr|dpo|legal|abuse|support|help|press|media|info@?$|"
+BAD_LOCAL = re.compile(r"^(no-?reply|do-?not-?reply|privacy|gdpr|dpo|legal|abuse|support|help|press|media|"
                        r"accommodations?|accessibility|disability|webmaster|unsubscribe|security|billing|sales)", re.I)
 BAD_DOMAIN = ("example.com", "example.org", "domain.com", "email.com", "sentry.io", "wixpress.com", "linkedin.com",
-              "greenhouse.io", "lever.co", "ashbyhq.com", "indeed.com", "glassdoor.com")
+              "greenhouse.io", "lever.co", "ashbyhq.com", "indeed.com", "glassdoor.com",
+              # job sites and blogs that list jobs: their own addresses never take applications
+              "jobwebkenya.com", "corporatestaffing.co.ke", "careerpointkenya.co.ke", "opportunitiesforyoungkenyans.co.ke",
+              "myjobmag.co.ke", "myjobmag.com", "brightermonday.co.ke", "fuzu.com", "kenyajob.com", "ngojobsinafrica.com",
+              "weworkremotely.com", "himalayas.app", "jobicy.com", "remotive.com", "remoteok.com", "arbeitnow.com",
+              "workingnomads.com", "workingnomads.co")
 SUBJECT_RE = re.compile(r"(?:subject(?: line)?|title of (?:the|your) (?:e-?mail|mail))\s*(?:line)?\s*(?:should (?:be|read)|:|as|must be|of)?\s*"
                         r"[\"'“‘]?([^\"'”’\n]{4,120}?)[\"'”’]?(?:\.\s|\n|$|,)", re.I)
 
@@ -63,7 +68,9 @@ def find_apply_email(text: str) -> dict | None:
             best = (score, addr, m.start())
     if not best:
         return None
-    subj = SUBJECT_RE.search(text[max(0, best[2] - 400): best[2] + 400])
+    near = text[max(0, best[2] - 400): best[2] + 400]
+    quoted = re.search(r"subject(?: line)?[^\"“'\n]{0,40}[\"“]([^\"”\n]{4,120})[\"”]", near, re.I)
+    subj = quoted or SUBJECT_RE.search(near)
     return {"to": best[1], "subject_hint": subj.group(1).strip() if subj else None}
 
 

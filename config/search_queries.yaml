@@ -12,9 +12,36 @@ searches:
   - {term: '"backend engineer" OR "python developer" OR "software engineer"', track: software}
   - {term: '"integration engineer" OR "HL7" OR "PL/SQL developer"', track: software}
   - {term: '"mechanical engineer" OR "design engineer" OR "maintenance engineer"', track: mechanical}
+  - {term: '"data analyst" OR "data engineer" OR "business intelligence" OR "power bi"', track: ai_data}
+  - {term: '"full stack developer" OR "web developer" OR "django" OR "react developer"', track: software}
+  - {term: '"IT support" OR "systems administrator" OR "ICT officer"', track: general}
+  - {term: '"graduate engineer" OR "project engineer" OR "production engineer" OR "HVAC"', track: mechanical}
+  - {term: '"technical support engineer" OR "customer support engineer" OR "QA engineer"', track: software}
 
 # Free remote-job boards with exact posting times (see src/discovery/remote_boards.py).
 remote_boards: [remotive, remoteok, himalayas, jobicy, weworkremotely]
+
+# Kenyan job sites and blogs, plus more remote boards (src/discovery/more_boards.py).
+# Kenyan blogs often say "send your CV and cover letter to hr@...": those are emailed
+# automatically, and go first because nothing can block them.
+# Check which ones work from your laptop: START_SPRINT.bat --check-sources
+more_sources:
+  enabled: true
+  max_jobs_per_board: 40
+  pause_seconds: 1.0
+  rss_feeds:
+    - {name: jobwebkenya, url: "https://www.jobwebkenya.com/feed/", location: Kenya}
+    - {name: corporatestaffing, url: "https://www.corporatestaffing.co.ke/feed/", location: Kenya}
+    - {name: careerpointkenya, url: "https://www.careerpointkenya.co.ke/feed/", location: Kenya}
+    - {name: opportunitiesforyoungkenyans, url: "https://opportunitiesforyoungkenyans.co.ke/feed/", location: Kenya}
+    - {name: myjobmag, url: "https://www.myjobmag.co.ke/feeds/jobs", location: Kenya}
+    - {name: ngojobsinafrica, url: "https://ngojobsinafrica.com/feed/", location: Kenya}
+  html_boards:
+    - {name: brightermonday, list_url: "https://www.brightermonday.co.ke/jobs?sort=latest", link: "/listings/[^\"'?#]+"}
+    - {name: fuzu, list_url: "https://www.fuzu.com/kenya/job", link: "/kenya/job/[^\"'?#]+"}
+    - {name: myjobmag_web, list_url: "https://www.myjobmag.co.ke/jobs", link: "/job/[^\"'?#]+"}
+    - {name: kenyajob, list_url: "https://www.kenyajob.com/job-vacancies-kenya", link: "/job-vacancies-kenya/[^\"'?#]+"}
+  json_apis: [arbeitnow, workingnomads]
 
 # Where to look. jobspy has no Indeed/Glassdoor support for Kenya, so LinkedIn
 # carries most of the load: Kenya, plus remote roles open worldwide.

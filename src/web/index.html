@@ -146,12 +146,12 @@ const STATE = {
   READY_TO_SUBMIT:  { chip: "ok",   label: "verified ready", group: "ready" },
   NEEDS_USER_INPUT: { chip: "warn", label: "needs you",      group: "needs" },
   NEEDS_LOGIN:      { chip: "info", label: "sign in once",   group: "login" },
-  NEEDS_MANUAL_OTP: { chip: "warn", label: "CAPTCHA / SMS",  group: "login" },
+  NEEDS_MANUAL_OTP: { chip: "warn", label: "CAPTCHA (optional)", group: "captcha" },
   MANUAL_APPLY:     { chip: "",     label: "apply yourself", group: "manual" },
   SENT_UNCONFIRMED: { chip: "warn", label: "sent? check",    group: "sent" },
   SUBMITTED:        { chip: "ok",   label: "sent",           group: "sent" },
 };
-const FILTERS = [["todo", "To do"], ["ready", "Verified"], ["needs", "Needs you"], ["login", "Sign in"], ["manual", "Apply yourself"], ["sent", "Sent"], ["all", "All"]];
+const FILTERS = [["todo", "To do"], ["ready", "Verified"], ["needs", "Needs you"], ["login", "Sign in"], ["captcha", "CAPTCHA (optional)"], ["manual", "Apply yourself"], ["sent", "Sent"], ["all", "All"]];
 const inFilter = it => { const g = (STATE[it.state] || {}).group; return filter === "all" || (filter === "todo" ? g !== "sent" : g === filter); };
 const stateChip = s => { const d = STATE[s] || { chip: "", label: s }; return `<span class="chip ${d.chip}">${d.label}</span>`; };
 
@@ -175,7 +175,7 @@ async function checkUpdate() {
 function renderTop() {
   const f = summary.forms, st = summary.settings || {}, sent = summary.sent_today || {};
   const tiles = [["ready", "ok", f.READY_TO_SUBMIT, "Verified, ready to submit"], ["needs", "warn", f.NEEDS_USER_INPUT, "Need your answers"],
-    ["login", "info", (f.NEEDS_LOGIN || 0) + (f.NEEDS_MANUAL_OTP || 0), "Need a sign-in or code"], ["manual", "", f.MANUAL_APPLY, "Apply yourself"],
+    ["login", "info", f.NEEDS_LOGIN, "Need a sign-in"], ["manual", "", f.MANUAL_APPLY, "Apply yourself"],
     ["sent", "ok", (sent.forms || 0) + (sent.email || 0), "Sent today"], ["sent", "", (f.SUBMITTED || 0) + (f.SENT_UNCONFIRMED || 0), "Sent in total"]];
   $("#stats").innerHTML = tiles.map(([g, c, n, l]) => `<button class="stat ${c}" data-g="${g}"><div class="n">${n || 0}</div><div class="l">${l}</div></button>`).join("");
   document.querySelectorAll(".stat").forEach(b => b.onclick = () => { switchTab("jobs"); filter = b.dataset.g; cur = 0; render(); });
@@ -229,7 +229,7 @@ function banner(it) {
       ? `<div class="banner ok">Ready. This job takes applications by email: your CV and the cover letter below go to <b>${esc(h)}</b>.</div>`
       : `<div class="banner ok">Verified ready. Every required field has a value, your tailored CV is attached, and the form shows no errors.</div>`;
     case "NEEDS_USER_INPUT": return `<div class="banner warn">Answer the questions marked <b>needs you</b>, then press Submit.</div>`;
-    case "NEEDS_MANUAL_OTP": return `<div class="banner warn"><b>${esc(h)}</b> asked for a CAPTCHA or a code texted to your phone, and nobody answered within 2 minutes. The next run tries again and alerts you (keep Google Messages open in Job Agent Chrome and SMS codes are read for you). Or apply yourself with the tailored CV.</div>`;
+    case "NEEDS_MANUAL_OTP": return `<div class="banner warn"><b>${esc(h)}</b> shows a CAPTCHA, which the agent never solves, so it skipped this one and carried on. Optional: when you're around, press <b>Submit</b> and tick the CAPTCHA; everything else is filled.</div>`;
     case "NEEDS_LOGIN": return `<div class="banner info"><b>${esc(h)}</b> wants you signed in. Press <b>Sign in to sites</b> once (Continue with Google works); the next run fills this form. Or apply yourself with the tailored CV.</div>`;
     case "MANUAL_APPLY": return `<div class="banner plain">No form the agent can fill. Open the application and use your tailored CV.</div>`;
     case "SENT_UNCONFIRMED": return `<div class="banner warn">Submit was pressed but no thank-you page appeared. Check the screenshot; it won't be sent again.</div>`;
@@ -258,7 +258,7 @@ function answerRows(it) {
 
 function renderDetail(it) {
   if (!it) { $("#detail").innerHTML = `<div class="empty"><b>Nothing to review</b>New jobs appear here after each run.</div>`; return; }
-  const canSubmit = ["READY_TO_SUBMIT", "NEEDS_USER_INPUT"].includes(it.state);
+  const canSubmit = ["READY_TO_SUBMIT", "NEEDS_USER_INPUT", "NEEDS_MANUAL_OTP"].includes(it.state);
   const open = ["MANUAL_APPLY", "NEEDS_LOGIN", "NEEDS_MANUAL_OTP", "SENT_UNCONFIRMED"].includes(it.state);
   const letter = isMail(it) ? (it.answers.find(a => a.label === "Cover letter") || {}).value : null;
   const rows = answerRows(it);
@@ -299,7 +299,7 @@ async function post(url, body) {
 }
 
 async function submit() {
-  const it = visible()[cur]; if (!it || busy || !["READY_TO_SUBMIT", "NEEDS_USER_INPUT"].includes(it.state)) return;
+  const it = visible()[cur]; if (!it || busy || !["READY_TO_SUBMIT", "NEEDS_USER_INPUT", "NEEDS_MANUAL_OTP"].includes(it.state)) return;
   const overrides = {}, consents = [];
   document.querySelectorAll("[data-ov]").forEach(el => { if (el.value) overrides[el.dataset.ov] = el.value; });
   document.querySelectorAll("[data-consent]").forEach(el => { if (el.checked) consents.push(el.dataset.consent); });

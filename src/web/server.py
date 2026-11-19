@@ -102,7 +102,7 @@ def create_app(ws) -> FastAPI:
         if not _submit_lock.acquire(blocking=False):
             raise HTTPException(409, "another submission is running")
         try:
-            return do_submit(ws, sid, payload.get("overrides"), payload.get("consents"))
+            return do_submit(ws, sid, payload.get("overrides"), payload.get("consents"), attended=True)
         finally:
             _submit_lock.release()
 

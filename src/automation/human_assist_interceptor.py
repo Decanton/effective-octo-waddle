@@ -231,8 +231,9 @@ def assist(page, job: dict | None = None, ctx=None, kind: str | None = None, wai
     company = (job or {}).get("company") or urlparse(page.url or "").netloc or "a job site"
     host = urlparse(page.url or "").netloc.replace("www.", "")
     hints = [company, host.split(".")[0] if host else ""]
-    if wait_seconds is None:  # nobody can solve anything in a hidden (headless) browser
-        wait_seconds = 0 if os.environ.get("JOBSPRINT_HEADLESS") == "1" else cfg.get("wait_seconds", 120)
+    if wait_seconds is None:  # unattended (the default) or a hidden browser: nobody to ask, move on at once
+        attended = bool(cfg.get("attended")) and os.environ.get("JOBSPRINT_HEADLESS") != "1"
+        wait_seconds = cfg.get("wait_seconds", 120) if attended else 0
     wait_seconds = float(wait_seconds)
     sms_wait = float(cfg.get("sms_wait_seconds", 10) if sms_wait is None else sms_wait)
 
@@ -249,7 +250,7 @@ def assist(page, job: dict | None = None, ctx=None, kind: str | None = None, wai
     what = "Solve the CAPTCHA" if kind == "captcha" else "Enter the SMS code"
     msg = f"[JobSprintAgent] Action needed on {company}: {what} in Chrome"
     if wait_seconds <= 0:
-        log.info("  %s: no one to ask in a hidden browser", msg)
+        log.info("  %s: skipped (unattended); it's on the optional CAPTCHA list", msg)
         return "timeout"
     _front(page)
     notify("JobSprintAgent: action needed", msg)

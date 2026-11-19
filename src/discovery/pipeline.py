@@ -8,11 +8,11 @@ from datetime import datetime
 from .. import database as db
 from ..cv_tailor.single_template_tailor import load_profile
 from ..intelligence.job_ranker import rank
-from . import ai_platforms, ats_api_fetcher, jobspy_fetcher, remote_boards
+from . import ai_platforms, ats_api_fetcher, jobspy_fetcher, more_boards, remote_boards
 from .common import load_yaml, log
 
 
-def run(ws, run_id: int | None = None, sources=("email", "jobspy", "ats", "remote")) -> dict:
+def run(ws, run_id: int | None = None, sources=("email", "jobspy", "ats", "remote", "more")) -> dict:
     profile = load_profile()
     search_cfg = load_yaml("search_queries.yaml")
     platform_cfg = load_yaml("ai_platforms.yaml")
@@ -31,6 +31,8 @@ def run(ws, run_id: int | None = None, sources=("email", "jobspy", "ats", "remot
         raw += ats_api_fetcher.fetch(platform_cfg)
     if "remote" in sources:
         raw += remote_boards.fetch(search_cfg.get("remote_boards") or remote_boards.FEEDS.keys())
+    if "more" in sources:  # Kenyan job sites and blogs, more remote boards
+        raw += more_boards.fetch(search_cfg)
     if "jobspy" in sources:
         raw += jobspy_fetcher.fetch(search_cfg)
     log.info("Found %d postings in total. Applying the 24-hour rule and knockouts...", len(raw))

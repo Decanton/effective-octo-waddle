@@ -20,10 +20,25 @@ def load_yaml(name: str) -> dict:
         return yaml.safe_load(fh) or {}
 
 
+def _cf_decode(hexstr: str) -> str:
+    """Cloudflare hides emails on many job blogs as data-cfemail="..."; this undoes it."""
+    try:
+        key = int(hexstr[:2], 16)
+        return "".join(chr(int(hexstr[i:i + 2], 16) ^ key) for i in range(2, len(hexstr), 2))
+    except ValueError:
+        return ""
+
+
+def decode_emails(html: str) -> str:
+    html = re.sub(r"<[^>]+data-cfemail=[\"']([0-9a-fA-F]+)[\"'][^>]*>.*?</[^>]+>", lambda m: _cf_decode(m.group(1)), html, flags=re.S)
+    return re.sub(r"/cdn-cgi/l/email-protection#([0-9a-fA-F]+)", lambda m: "mailto:" + _cf_decode(m.group(1)), html)
+
+
 def html_to_text(html: str | None) -> str:
     if not html:
         return ""
-    text = unescape(html)
+    text = unescape(decode_emails(html))
+    text = re.sub(r"<a[^>]+href=[\"']mailto:([^\"'?]+)[^>]*>(?!\s*\1)", lambda m: m.group(0) + f" {m.group(1)} ", text, flags=re.I)
     text = re.sub(r"<(br|/p|/li|/h\d)[^>]*>", "\n", text, flags=re.I)
     text = re.sub(r"<[^>]+>", " ", text)
     text = unescape(text)

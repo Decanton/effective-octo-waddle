@@ -69,10 +69,13 @@ email:
   lookback_hours: 24
 
 human_assist:
-  # CAPTCHAs and phone (SMS) codes. The agent never solves a CAPTCHA: it brings the
-  # Chrome tab to the front, shows a desktop alert with a chime, and waits for you.
+  # CAPTCHAs and phone (SMS) codes. The agent never solves a CAPTCHA.
   enabled: true
-  # How long to wait for you before moving on (the job is then marked NEEDS_MANUAL_OTP).
+  # false (default): runs unattended, even overnight. A job behind a CAPTCHA is skipped
+  # at once and put on the optional "CAPTCHA" list; nothing ever waits for you.
+  # true: bring the tab to the front with an alert and chime, and wait for you.
+  attended: false
+  # When attended: how long to wait before moving on.
   wait_seconds: 120
   # With Google Messages for Web open in Job Agent Chrome (paired with your phone), the
   # agent reads the new SMS code itself. Money messages (M-PESA, bank) are never used.

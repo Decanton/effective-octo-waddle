@@ -174,6 +174,7 @@ def main(argv=None) -> int:
     ap.add_argument("--review", action="store_true")
     ap.add_argument("--review-backend", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--port", type=int, default=8000, help=argparse.SUPPRESS)
+    ap.add_argument("--check-sources", action="store_true", help="try every job source once and show what each returns")
     ap.add_argument("--update", action="store_true", help="install the newest version from GitHub now (tests run first)")
     ap.add_argument("--no-update", action="store_true", help="don't check for a new version this run")
     ap.add_argument("--no-review", action="store_true", help="don't open the review page at the end")
@@ -260,6 +261,8 @@ def main(argv=None) -> int:
         from src.web.frontdoor import serve
         serve(ws)
         return 0
+    if args.check_sources:
+        return check_sources(log)
     if args.update:
         from src import updater
         res = updater.check_and_update(ws, force=True)
@@ -292,6 +295,25 @@ def main(argv=None) -> int:
         from src.web.frontdoor import serve
         serve(ws)
     return rc
+
+
+def check_sources(log) -> int:
+    """Fetch every job source once and print how many postings each gave (and how many are from the last 24h)."""
+    from src.discovery import more_boards, remote_boards
+    from src.discovery.common import load_yaml
+    cfg = load_yaml("search_queries.yaml")
+    report = {}
+    more_boards.fetch(cfg, report)
+    for name in cfg.get("remote_boards") or []:
+        try:
+            found = remote_boards.fetch([name])
+            report[name] = (len(found), sum(1 for j in found if (j["age_hours"] or 99) <= 24), None if found else "nothing returned")
+        except Exception as exc:
+            report[name] = (0, 0, str(exc)[:120])
+    print(f"\n{'source':<30} {'postings':>8} {'last 24h':>8}  problem")
+    for name, (n, fresh, err) in report.items():
+        print(f"{name:<30} {n:>8} {fresh:>8}  {err or ''}")
+    return 0
 
 
 def _self_update(ws, log) -> bool:

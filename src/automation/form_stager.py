@@ -383,7 +383,9 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
     shot = ws.screenshots / f"{jid}_{_safe(job.get('company'))}_staged.png"
     page.screenshot(path=str(shot), full_page=True)
     state = "NEEDS_USER_INPUT" if missing else "READY_TO_SUBMIT"
-    note = "CAPTCHA on this form: you'll solve it when you press Submit." if form_fields.has_captcha(page) else None
+    note = None
+    if hia.detect(page) == "captcha":  # a visible CAPTCHA on the form: can't finish unattended; kept on the optional list
+        state, note = "NEEDS_MANUAL_OTP", "This form has a CAPTCHA, so it can't be sent unattended. Everything else is filled; press Submit and tick the CAPTCHA when you're around."
     cur = conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, answers_json, missing_json, state, error, created_at) "
                        "VALUES (?,?,?,?,?,?,?,?)", (jid, cv_id, url, json.dumps(answers), json.dumps(missing), state, note, db.now_iso()))
     conn.execute("INSERT INTO screenshots(staged_form_id, path, created_at) VALUES (?,?,?)", (cur.lastrowid, str(shot), db.now_iso()))
@@ -402,12 +404,17 @@ def run(ws, limit: int | None = None) -> dict:
     counts = {}
     with db.session(ws.db_path) as conn:
         pool = [dict(r) for r in conn.execute(
-            "SELECT * FROM jobs WHERE status = 'QUALIFIED' ORDER BY priority_score DESC LIMIT ?", (limit * 4,))]
-    # Jobs that point straight at a Greenhouse, Lever or Ashby form go first: those fill reliably.
+            "SELECT * FROM jobs WHERE status = 'QUALIFIED' ORDER BY priority_score DESC LIMIT 600")]
+        walls = {urlparse(r[0]).netloc for r in conn.execute(
+            "SELECT form_url FROM staged_forms WHERE state IN ('NEEDS_MANUAL_OTP','NEEDS_LOGIN') AND created_at >= date('now','-14 days')")}
+    # What finishes with nobody there goes first: "email your CV" posts, then Greenhouse/Lever/Ashby/Workable
+    # forms, then the rest; sites that showed a CAPTCHA or sign-in wall lately go last.
     def order(j):
-        if application_url(j):
+        if email_apply.find_apply_email(j.get("description") or "") and not application_url(j):
             return 0
-        return 1 if email_apply.find_apply_email(j.get("description") or "") else 2
+        if application_url(j):
+            return 1
+        return 3 if urlparse(j.get("apply_url") or j.get("url") or "").netloc in walls else 2
     jobs = sorted(pool, key=order)[:limit]
     if not jobs:
         log.info("No qualified jobs waiting. Run --discover first.")

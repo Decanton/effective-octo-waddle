@@ -25,7 +25,7 @@ def _key(label: str, kind: str) -> str:
 
 
 def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str] | None = None,
-           confirm_wait_ms: int = 180_000) -> dict:
+           confirm_wait_ms: int = 180_000, attended: bool = False) -> dict:
     from .browser_manager import browser
     with db.session(ws.db_path) as conn:
         r = conn.execute("SELECT form_url FROM staged_forms WHERE id = ?", (staged_id,)).fetchone()
@@ -39,7 +39,7 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
                            (staged_id,)).fetchone()
         if row is None:
             return {"ok": False, "error": "staged form not found"}
-        if row["state"] not in ("READY_TO_SUBMIT", "NEEDS_USER_INPUT"):
+        if row["state"] not in ("READY_TO_SUBMIT", "NEEDS_USER_INPUT") and not (attended and row["state"] == "NEEDS_MANUAL_OTP"):
             return {"ok": False, "error": f"cannot submit a form in state {row['state']}"}
         saved = {_key(a["label"], a["kind"]): a for a in json.loads(row["answers_json"] or "[]")}
         cv = conn.execute("SELECT docx_path FROM tailored_cvs WHERE id = ?", (row["cv_id"],)).fetchone()
@@ -87,13 +87,14 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
             return {"ok": False, "error": "could not find the Submit button; submit it yourself in the open browser"}
         from . import human_assist_interceptor as hia
         job = {"company": row["company"], "title": row["title"]}
-        if hia.detect(page) and hia.assist(page, job) == "timeout":  # you tick the CAPTCHA, the agent presses Submit
+        wait = 180 if attended else None  # you pressed Submit yourself: wait for your tick
+        if hia.detect(page) and hia.assist(page, job, wait_seconds=wait) == "timeout":  # you tick the CAPTCHA, the agent presses Submit
             return {"ok": False, "error": "a CAPTCHA or phone code wasn't answered in time; nothing was submitted"}
         log.info("Submitting %s at %s", row["title"], row["company"])
         btn.click()
         page.wait_for_timeout(1500)
         if hia.detect(page):  # an image challenge or SMS code after pressing Submit
-            hia.assist(page, job)
+            hia.assist(page, job, wait_seconds=wait)
         try:
             page.wait_for_function("re => new RegExp(re, 'i').test(document.body.innerText)",
                                    arg=CONFIRM.pattern, timeout=confirm_wait_ms)
