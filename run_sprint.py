@@ -130,6 +130,20 @@ def email_only(ws, log) -> int:
     return 0
 
 
+def send_all(ws, log) -> None:
+    """Send complete applications (forms and email) and complete recruiter replies, within the daily caps."""
+    from src.automation import auto_submitter
+    from src.email_agent.recruiter_replies import auto_send
+    from src.settings import load_settings
+    settings = load_settings()
+    auto_submitter.run(ws, settings)
+    try:
+        with db.session(ws.db_path) as conn:
+            auto_send(conn, settings["recruiter_replies"])
+    except Exception as exc:  # email trouble must not stop the run
+        log.warning("Recruiter replies were not sent: %s", exc)
+
+
 def stage(ws, log, limit=None) -> dict:
     from src.automation import form_stager
     with db.session(ws.db_path) as conn:
@@ -209,8 +223,7 @@ def main(argv=None) -> int:
         stage(ws, log, args.stage_limit)
         return 0
     if args.send_ready:
-        from src.automation import auto_submitter
-        auto_submitter.run(ws)
+        send_all(ws, log)
         return 0
     if args.email_only:
         return email_only(ws, log)
@@ -226,8 +239,7 @@ def main(argv=None) -> int:
     discover(ws, log)
     stage(ws, log, args.stage_limit)
     if not args.no_send:
-        from src.automation import auto_submitter
-        auto_submitter.run(ws)
+        send_all(ws, log)
     if not args.no_review:
         from src.web.server import serve
         serve(ws)

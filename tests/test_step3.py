@@ -111,7 +111,7 @@ def test_review_api(tmp_path):
         jid = db.upsert_job(c, {"url": "https://x/1", "source": "remotive", "title": "AI Trainer", "status": "MANUAL_APPLY", "age_hours": 1})
         c.execute("INSERT INTO staged_forms(job_id, form_url, state, created_at) VALUES (?,?,?,?)", (jid, "https://x/1", "MANUAL_APPLY", db.now_iso()))
     client = TestClient(create_app(ws))
-    assert "Job Sprint review" in client.get("/").text
+    assert "Job Sprint" in client.get("/").text
     items = client.get("/api/staged").json()
     assert len(items) == 1 and items[0]["state"] == "MANUAL_APPLY"
     assert client.post(f"/api/skip/{items[0]['id']}").json()["ok"]

@@ -25,10 +25,26 @@ email_applications:
   # Never email more than this many applications in one day.
   max_per_day: 10
 
+google_sign_in:
+  # When a job site wants an account, click its "Continue with Google" button and
+  # pick EMAIL_ADDRESS. Needs one Google sign-in first: START_SPRINT.bat --login-setup.
+  # The agent never types a password; if Google asks for one, the job waits for you.
+  enabled: true
+  # true: also press Google's "Continue" on first use, which creates your account
+  # on that job site with your Google name and email.
+  allow_new_accounts: true
+
+recruiter_replies:
+  # true: replies to recruiter emails are sent automatically when the draft is
+  # complete (no [FILL IN ...] gap left). Drafts that need your times, salary and
+  # so on always wait on the Recruiter emails tab.
+  auto_send: true
+  max_per_day: 10
+  # These kinds of email always wait for you.
+  skip_categories: [rejection, offer]
+
 email:
   # Read job alerts and recruiter messages from the inbox in .env (EMAIL_ADDRESS).
   enabled: true
   # Only look at mail from the last N hours (job alerts older than a day are stale anyway).
   lookback_hours: 24
-  # Recruiter replies are always drafted for you to send from the review page.
-  # The agent never sends email on its own.

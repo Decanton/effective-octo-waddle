@@ -1,4 +1,5 @@
-"""Drafts replies to recruiter emails and sends one ONLY when you press Send.
+"""Drafts replies to recruiter emails; sends them when you press Send, or automatically
+(recruiter_replies.auto_send in config/agent_settings.yaml) when the draft has no gaps.
 
 Drafts are grounded in your profile (no invented facts). Sending uses SMTP with
 EMAIL_ADDRESS / EMAIL_APP_PASSWORD from .env and replies in the same thread.
@@ -17,8 +18,9 @@ from .. import llm_client
 log = logging.getLogger("jobsprint")
 
 SYSTEM = ("You write short, warm, professional replies from a job seeker to a recruiter. Use ONLY facts from the "
-          "candidate profile given. Never invent dates, salaries, availability or experience: where the recruiter "
-          "asks for something the profile doesn't have, write [FILL IN: what is needed]. No subject line. "
+          "candidate profile given. Never invent dates, times, salaries, availability or experience: where the recruiter "
+          "asks for something the profile doesn't have, write [FILL IN: what is needed]. Never accept or decline an "
+          "offer. No subject line. "
           "Sign with the candidate's full name.")
 
 
@@ -50,7 +52,12 @@ def draft(m: dict, profile: dict) -> str:
         prompt = (f"Candidate profile:\n{_profile_brief(profile)}\n\nRecruiter email from {m.get('from_name')} "
                   f"<{m.get('from_addr')}>, subject '{m.get('subject')}':\n{(m.get('text') or '')[:4000]}\n\nWrite the reply.")
         try:
-            return llm_client.complete(prompt, SYSTEM)
+            text = llm_client.complete(prompt, SYSTEM)
+            from ..intelligence.answer_engine import _unverified_numbers
+            bad = _unverified_numbers(text, _profile_brief(profile) + " " + (m.get("text") or "") + " " + (m.get("subject") or ""))
+            if bad:  # a time, date or figure the AI made up: leave it for you
+                text += f"\n\n[FILL IN: check these details before sending: {', '.join(bad)}]"
+            return text
         except Exception as exc:
             log.info("AI draft failed (%s); using a plain template.", exc)
     return fallback_draft(m, profile)
@@ -68,6 +75,34 @@ def save(conn, messages: list[dict], profile: dict) -> int:
                       draft(m, profile), "DRAFTED", db.now_iso()))
         added += 1
     return added
+
+
+def auto_send(conn, cfg: dict, smtp_factory=None) -> dict:
+    """Send complete drafts, within the daily cap. Drafts with [FILL IN ...] gaps wait for you."""
+    out = {"sent": 0, "waiting": 0}
+    if not cfg.get("auto_send"):
+        return out
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).date().isoformat()
+    budget = int(cfg.get("max_per_day", 10)) - conn.execute(
+        "SELECT COUNT(*) FROM recruiter_emails WHERE state = 'SENT' AND substr(sent_at, 1, 10) = ?", (today,)).fetchone()[0]
+    skip = set(cfg.get("skip_categories") or [])
+    for row in conn.execute("SELECT * FROM recruiter_emails WHERE state = 'DRAFTED' ORDER BY received_at").fetchall():
+        body = row["draft_reply"] or ""
+        if row["category"] in skip or "[FILL IN" in body or budget <= 0:
+            out["waiting"] += 1
+            continue
+        res = send(conn, row["id"], body, smtp_factory=smtp_factory)
+        if res["ok"]:
+            out["sent"] += 1
+            budget -= 1
+            log.info("Replied to %s: %s", row["from_addr"], row["subject"])
+        else:
+            out["waiting"] += 1
+            log.info("Reply to %s not sent: %s", row["from_addr"], res["error"])
+    if out["sent"] or out["waiting"]:
+        log.info("Recruiter replies: %d sent, %d waiting for you on the Recruiter emails tab.", out["sent"], out["waiting"])
+    return out
 
 
 def send(conn, email_id: int, body: str, smtp_factory=None) -> dict:

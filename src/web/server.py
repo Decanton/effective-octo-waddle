@@ -33,14 +33,16 @@ def create_app(ws) -> FastAPI:
     def staged():
         with db.session(ws.db_path) as c:
             rows = c.execute("""
-                SELECT s.id, s.state, s.form_url, s.answers_json, s.missing_json, s.error, s.created_at,
+                SELECT s.id, s.state, s.form_url, s.answers_json, s.missing_json, s.error, s.created_at, s.submitted_at,
                        j.id AS job_id, j.title, j.company, j.location, j.age_hours, j.applicant_count, j.track,
                        j.priority_score, j.fit_score, j.url, j.source, t.docx_path, t.matched_keywords,
                        (SELECT path FROM screenshots WHERE staged_form_id = s.id ORDER BY id DESC LIMIT 1) AS shot
                 FROM staged_forms s JOIN jobs j ON j.id = s.job_id LEFT JOIN tailored_cvs t ON t.id = s.cv_id
                 WHERE s.state IN ('READY_TO_SUBMIT','NEEDS_USER_INPUT','MANUAL_APPLY','NEEDS_LOGIN','SENT_UNCONFIRMED')
-                ORDER BY CASE s.state WHEN 'READY_TO_SUBMIT' THEN 0 WHEN 'NEEDS_USER_INPUT' THEN 1 WHEN 'SENT_UNCONFIRMED' THEN 2 WHEN 'NEEDS_LOGIN' THEN 3 ELSE 4 END,
-                         j.priority_score DESC""").fetchall()
+                   OR (s.state = 'SUBMITTED' AND s.submitted_at >= date('now', '-14 days'))
+                ORDER BY CASE s.state WHEN 'READY_TO_SUBMIT' THEN 0 WHEN 'NEEDS_USER_INPUT' THEN 1 WHEN 'SENT_UNCONFIRMED' THEN 2
+                         WHEN 'NEEDS_LOGIN' THEN 3 WHEN 'MANUAL_APPLY' THEN 4 ELSE 5 END,
+                         s.submitted_at DESC, j.priority_score DESC""").fetchall()
         out = []
         for r in rows:
             d = dict(r)
@@ -55,7 +57,19 @@ def create_app(ws) -> FastAPI:
     def summary():
         with db.session(ws.db_path) as c:
             forms = {r[0]: r[1] for r in c.execute("SELECT state, COUNT(*) FROM staged_forms GROUP BY state")}
-            return {"forms": forms, "jobs": db.count_by_status(c)}
+            from ..automation.auto_submitter import sent_today
+            from ..settings import load_settings
+            st = load_settings()
+            last = c.execute("SELECT started_at, finished_at, mode, jobs_found, jobs_kept FROM sprint_runs "
+                             "ORDER BY id DESC LIMIT 1").fetchone()
+            return {"forms": forms, "jobs": db.count_by_status(c),
+                    "sent_today": {"forms": sent_today(c), "email": sent_today(c, by_email=True)},
+                    "settings": {"auto_forms": st["auto_submit"]["enabled"], "forms_per_day": st["auto_submit"]["max_per_day"],
+                                 "auto_email": st["email_applications"]["enabled"], "email_per_day": st["email_applications"]["max_per_day"],
+                                 "google": st["google_sign_in"]["enabled"]},
+                    "last_run": dict(last) if last else None,
+                    "emails_waiting": c.execute("SELECT COUNT(*) FROM recruiter_emails WHERE state = 'DRAFTED'").fetchone()[0],
+                    "task": _task_status()}
 
     @app.get("/files/screenshot/{sid}")
     def screenshot(sid: int):
@@ -85,6 +99,27 @@ def create_app(ws) -> FastAPI:
             _submit_lock.release()
 
     _bulk = {"running": False, "result": None}
+    _task = {"proc": None, "what": None}
+
+    def _task_status():
+        p = _task["proc"]
+        return {"running": bool(p and p.poll() is None), "what": _task["what"]}
+
+    @app.post("/api/run/{what}")
+    def run_task(what: str):
+        """Start the daily run or the sign-in window in its own console window."""
+        import subprocess
+        import sys
+        args = {"sprint": ["--no-review"], "login": ["--login-setup"]}.get(what)
+        if args is None:
+            raise HTTPException(404)
+        if _task_status()["running"]:
+            raise HTTPException(409, f"'{_task['what']}' is still running")
+        flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+        root = HERE.parents[1]
+        _task["proc"] = subprocess.Popen([sys.executable, str(root / "run_sprint.py"), *args], cwd=str(root), creationflags=flags)
+        _task["what"] = what
+        return {"ok": True}
 
     @app.post("/api/submit_all")
     def submit_all():

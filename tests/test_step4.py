@@ -291,3 +291,59 @@ def test_linkedin_page_fills_company_and_location():
     out = parse_linkedin_job_html(html, {"title": "x", "company": None})
     assert out["company"] == "Acme Ltd" and out["location"] == "Nairobi, Kenya" and out["age_hours"] == 3
     assert "company" not in parse_linkedin_job_html(html, {"company": "Known"})
+
+
+@pytest.mark.skipif(not _browser_ok(), reason="Playwright browser not installed")
+def test_continue_with_google_picks_the_job_account(tmp_path, monkeypatch):
+    from src.automation import google_signin
+    from src.automation.browser_manager import browser
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    pages = {
+        "https://jobs.example.test/login": "<h1>Sign in</h1><input type=password><a href='https://accounts.google.com/o/oauth2/auth'>Continue with Google</a>",
+        "https://accounts.google.com/o/oauth2/auth": "<div data-email='other@gmail.com'>Other</div>"
+            "<div data-email='me@example.com' onclick=\"location='https://accounts.google.com/consent'\">Me</div>",
+        "https://accounts.google.com/consent": "<button onclick=\"location='https://jobs.example.test/apply'\">Continue</button>",
+        "https://jobs.example.test/apply": "<form><label for=a>First Name</label><input id=a><label for=b>Last Name</label><input id=b>"
+            "<label for=c>Email</label><input id=c type=email></form>",
+        "https://accounts.google.com/pw": "<input type=email>",
+    }
+    with browser(ws) as ctx:
+        ctx.route("**/*", lambda r: r.fulfill(body=pages.get(r.request.url.split("?")[0], "<p>404</p>"), content_type="text/html"))
+        page = ctx.new_page()
+        page.goto("https://jobs.example.test/login")
+        assert google_signin.try_google(page, "me@example.com") == "ok"
+        assert page.url == "https://jobs.example.test/apply"
+        pages["https://jobs.example.test/login"] = "<a href='https://accounts.google.com/pw'>Sign in with Google</a>"
+        page.goto("https://jobs.example.test/login")
+        assert google_signin.try_google(page, "me@example.com") == "needs_password"  # never types a password
+        page.set_content("<p>No buttons</p>")
+        assert google_signin.try_google(page, "me@example.com") == "no_button"
+
+
+def test_recruiter_replies_auto_send_only_complete_drafts(tmp_path, monkeypatch):
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    monkeypatch.setattr(recruiter_replies.llm_client, "available", lambda: False)
+    monkeypatch.setenv("EMAIL_ADDRESS", "me@example.com")
+    monkeypatch.setenv("EMAIL_APP_PASSWORD", "pw")
+    base = {"from_name": "Jane", "text": "x", "received_at": "2026-11-19T08:00:00+00:00"}
+    msgs = [{**base, "message_id": "<a>", "from_addr": "a@acme.com", "subject": "Data role", "category": "other"},
+            {**base, "message_id": "<b>", "from_addr": "b@acme.com", "subject": "Interview", "category": "interview_request"},
+            {**base, "message_id": "<c>", "from_addr": "c@acme.com", "subject": "Update", "category": "rejection"},
+            {**base, "message_id": "<d>", "from_addr": "d@acme.com", "subject": "Another role", "category": "other"}]
+    sent = []
+
+    class FakeSMTP:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def login(self, u, p): pass
+        def send_message(self, m): sent.append(m["To"])
+    with db.session(ws.db_path) as c:
+        recruiter_replies.save(c, msgs, PROFILE)
+        cfg = load_settings()["recruiter_replies"]
+        assert recruiter_replies.auto_send(c, {**cfg, "auto_send": False}, FakeSMTP)["sent"] == 0 and not sent
+        out = recruiter_replies.auto_send(c, {**cfg, "auto_send": True, "max_per_day": 1}, FakeSMTP)
+        assert sent == ["a@acme.com"] and out["waiting"] == 3  # interview has a [FILL IN] gap, rejection skipped, cap 1
+        recruiter_replies.auto_send(c, {**cfg, "auto_send": True, "max_per_day": 5}, FakeSMTP)
+        assert sent == ["a@acme.com", "d@acme.com"]

@@ -63,8 +63,13 @@ Everything else waits on the review page, where **Send all ready** sends every c
 ## Applying by email
 Some jobs say "send your CV and cover letter to hr@company.com". The agent finds that address in the job post, or on the page the Apply link opens. It then writes a cover letter that uses only facts from your profile, and emails it with your tailored CV (both as Word files) from `EMAIL_ADDRESS`. It never uses privacy, accessibility, support or no-reply addresses. Each job is emailed once. Set `email_applications` in `config/agent_settings.yaml` (on, with up to 10 a day) to choose whether these go out automatically or wait on the review page, where they show as **by email** with the letter editable.
 
-## Sign-ins
-Some sites need an account before you can apply. Those jobs show **sign in once**. Run `START_SPRINT.bat --login-setup`, then sign in or sign up yourself on each tab. The browser remembers you, and the agent never sees your passwords. Then run `START_SPRINT.bat --restage --stage-only` and those forms get filled.
+## Sign-ins and Continue with Google
+The agent uses your installed Google Chrome with its own profile (`JobSprintAgent\browser_profile_chrome`). Your everyday Chrome profile can't be shared with an automated browser, so sign in to Google once there:
+1. Run `START_SPRINT.bat --login-setup`, or press **Sign in to sites** on the review page. A normal Chrome window opens.
+2. On the first tab, sign in to Google as your job-search Gmail (`EMAIL_ADDRESS`). Use your password or phone prompt; the agent never sees it.
+3. On the other tabs, use **Continue with Google** on each job site, then close the window.
+
+After that, whenever a site asks for an account, the agent clicks its **Continue with Google** button and picks your account by itself (`google_sign_in` in `config/agent_settings.yaml`). If Google asks for a password or a phone prompt, the job waits for you as **sign in once**.
 
 ## Email
 With `EMAIL_ADDRESS` and `EMAIL_APP_PASSWORD` in `.env`, each run reads the last 24 hours of the inbox. It opens the inbox read-only, so nothing is marked read or moved.

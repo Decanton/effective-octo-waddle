@@ -178,6 +178,26 @@ def _follow_to_ats(page, job: dict, depth: int = 2) -> str | None:
     return page.url if _has_form(page) else None
 
 
+def _google_then_retry(page, job: dict) -> str | None:
+    """On a sign-in page: try "Continue with Google", then look for the form again."""
+    import os
+
+    from ..settings import load_settings
+    from .google_signin import try_google
+    cfg = load_settings()["google_sign_in"]
+    account = os.environ.get("EMAIL_ADDRESS", "")
+    if not (cfg["enabled"] and account):
+        return None
+    result = try_google(page, account, bool(cfg["allow_new_accounts"]))
+    if result != "ok":
+        if result == "needs_password":
+            log.info("Google wants you to sign in first at %s. Run START_SPRINT.bat --login-setup once.", urlparse(page.url).netloc)
+        return None
+    if _has_form(page):
+        return page.url
+    return _follow_to_ats(page, job)
+
+
 def _needs_login(conn, jid: int, cv_id: int, at_url: str) -> str:
     """The site wants an account. Run --login-setup, sign in once, and the next run retries it."""
     host = urlparse(at_url).netloc
@@ -214,7 +234,9 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
         if found:
             return email_apply.stage(conn, ws, job, cv_id, cv_path, cv.track, found, profile)
     if not url and _account_page(page) and not page.url.startswith("about:"):
-        return _needs_login(conn, jid, cv_id, page.url)
+        url = _google_then_retry(page, job)
+        if not url:
+            return _needs_login(conn, jid, cv_id, page.url)
     if not url:
         conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
                      (jid, cv_id, job.get("apply_url") or job["url"], "MANUAL_APPLY", db.now_iso(),
@@ -225,7 +247,13 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
     page.goto(url, wait_until="domcontentloaded")
     page.wait_for_timeout(2500)
     if _account_page(page):
-        return _needs_login(conn, jid, cv_id, page.url)
+        retry = _google_then_retry(page, job)
+        if retry and retry != url:
+            page.goto(retry, wait_until="domcontentloaded")
+            page.wait_for_timeout(2500)
+        if _account_page(page):
+            return _needs_login(conn, jid, cv_id, page.url)
+        url = page.url
     fields = form_fields.discover(page)
     if not fields:
         conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",

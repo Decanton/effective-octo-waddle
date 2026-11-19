@@ -5,121 +5,300 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Job Sprint Review</title>
 <style>
-  :root { --bg:#f6f7f9; --panel:#fff; --text:#1d2330; --muted:#667085; --line:#e4e7ec; --accent:#1f3a5f;
-          --ok:#127a46; --warn:#b54708; --bad:#b42318; --chip:#eef2f6; --sel:#e8eef7; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#111418; --panel:#1a1f26; --text:#e6e9ee; --muted:#98a2b3;
-          --line:#2c333d; --accent:#8fb3e6; --ok:#4cc38a; --warn:#f5a524; --bad:#f97066; --chip:#232a33; --sel:#22324a; } }
+  :root {
+    --bg:#f4f6f8; --panel:#ffffff; --panel2:#f9fafb; --text:#18202b; --muted:#5f6b7a; --line:#e3e7ec;
+    --accent:#2457c5; --accent-ink:#ffffff; --accent-soft:#e8effc;
+    --ok:#127a46; --ok-soft:#e5f5ec; --warn:#a85a00; --warn-soft:#fdf1e2; --bad:#b42318; --bad-soft:#fdeceb;
+    --info:#5b4bc4; --info-soft:#efedfb; --shadow:0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  }
+  @media (prefers-color-scheme: dark) { :root {
+    --bg:#0f1318; --panel:#171c23; --panel2:#1c232b; --text:#e7ebf0; --muted:#9aa6b4; --line:#2a323c;
+    --accent:#7aa2f7; --accent-ink:#0f1318; --accent-soft:#1d2a44;
+    --ok:#4cc38a; --ok-soft:#14291f; --warn:#f0a645; --warn-soft:#2e2416; --bad:#f97066; --bad-soft:#2f1b1a;
+    --info:#a99cf5; --info-soft:#231f3a; --shadow:none; } }
   * { box-sizing:border-box; }
-  body { margin:0; font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
-  header { display:flex; gap:16px; align-items:center; padding:12px 20px; border-bottom:1px solid var(--line); background:var(--panel); flex-wrap:wrap; }
-  header h1 { font-size:16px; margin:0; }
-  .tabs button { background:none; border:0; padding:6px 10px; color:var(--muted); cursor:pointer; font:inherit; border-radius:6px; }
-  .tabs button.on { background:var(--sel); color:var(--text); font-weight:600; }
-  #counts { margin-left:auto; color:var(--muted); font-size:13px; }
-  main { display:grid; grid-template-columns:minmax(260px, 360px) 1fr; height:calc(100vh - 54px); }
-  #list { overflow:auto; border-right:1px solid var(--line); background:var(--panel); }
-  .item { padding:10px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
-  .item.on { background:var(--sel); }
-  .item .t { font-weight:600; }
-  .item .c { color:var(--muted); font-size:13px; }
-  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
-  .chip { background:var(--chip); border-radius:999px; padding:1px 8px; font-size:12px; }
-  .chip.ok { color:var(--ok); } .chip.warn { color:var(--warn); } .chip.bad { color:var(--bad); }
-  #detail { overflow:auto; padding:18px 24px 80px; }
-  #detail h2 { margin:0 0 4px; font-size:20px; }
-  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:12px 0; }
-  .btn { border:1px solid var(--line); background:var(--panel); color:var(--text); padding:8px 14px; border-radius:8px; cursor:pointer; font:inherit; text-decoration:none; }
-  .btn.primary { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:600; }
+  html, body { height:100%; }
+  body { margin:0; font:14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--text); display:flex; flex-direction:column; }
+  a { color:var(--accent); }
+  header { display:flex; align-items:center; gap:18px; padding:10px 20px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:16px; }
+  .logo { width:28px; height:28px; border-radius:8px; background:var(--accent); color:var(--accent-ink); display:grid; place-items:center; font-size:14px; }
+  nav { display:flex; gap:4px; }
+  nav button { position:relative; background:none; border:0; padding:7px 12px; color:var(--muted); cursor:pointer; font:inherit; border-radius:8px; }
+  nav button:hover { background:var(--panel2); color:var(--text); }
+  nav button.on { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  nav .badge { margin-left:6px; background:var(--warn); color:var(--panel); border-radius:999px; padding:0 6px; font-size:11px; font-weight:700; }
+  .hdr-actions { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); padding:7px 13px; border-radius:8px; cursor:pointer; font:inherit; text-decoration:none; white-space:nowrap; }
+  .btn:hover { border-color:var(--muted); }
+  .btn.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+  .btn.ghost { border-color:transparent; background:none; color:var(--muted); }
   .btn:disabled { opacity:.5; cursor:not-allowed; }
-  table { border-collapse:collapse; width:100%; margin:8px 0 16px; }
-  td, th { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .stats { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:10px; padding:14px 20px 0; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 14px; box-shadow:var(--shadow); cursor:pointer; text-align:left; font:inherit; color:inherit; }
+  .stat:hover { border-color:var(--accent); }
+  .stat .n { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .stat .l { color:var(--muted); font-size:12px; }
+  .stat.ok .n { color:var(--ok); } .stat.warn .n { color:var(--warn); } .stat.info .n { color:var(--info); }
+  .autobar { display:flex; gap:14px; flex-wrap:wrap; align-items:center; padding:8px 20px 0; color:var(--muted); font-size:12px; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; background:var(--muted); vertical-align:middle; }
+  .dot.on { background:var(--ok); }
+  main { flex:1; min-height:0; display:grid; grid-template-columns:minmax(280px, 380px) 1fr; gap:14px; padding:14px 20px 20px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); }
+  #side { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  .tools { padding:10px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:8px; }
+  .search { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel2); color:var(--text); font:inherit; }
+  .filters { display:flex; gap:6px; flex-wrap:wrap; }
+  .filters button { border:1px solid var(--line); background:var(--panel); color:var(--muted); border-radius:999px; padding:2px 10px; font:inherit; font-size:12px; cursor:pointer; }
+  .filters button.on { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  #list { overflow:auto; flex:1; }
+  .item { display:flex; gap:10px; padding:11px 12px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .item:hover { background:var(--panel2); }
+  .item.on { background:var(--accent-soft); box-shadow:inset 3px 0 0 var(--accent); }
+  .av { flex:none; width:34px; height:34px; border-radius:9px; display:grid; place-items:center; font-weight:700; background:var(--panel2); border:1px solid var(--line); color:var(--muted); }
+  .item .t { font-weight:600; line-height:1.3; }
+  .item .c { color:var(--muted); font-size:12.5px; }
+  .chips { display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; }
+  .chip { background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:0 8px; font-size:11.5px; color:var(--muted); }
+  .chip.ok { background:var(--ok-soft); color:var(--ok); border-color:transparent; }
+  .chip.warn { background:var(--warn-soft); color:var(--warn); border-color:transparent; }
+  .chip.bad { background:var(--bad-soft); color:var(--bad); border-color:transparent; }
+  .chip.info { background:var(--info-soft); color:var(--info); border-color:transparent; }
+  #detail { overflow:auto; padding:22px 26px 60px; min-height:0; }
+  .dh { display:flex; gap:14px; align-items:flex-start; }
+  .dh .av { width:46px; height:46px; font-size:18px; }
+  #detail h2 { margin:0; font-size:20px; line-height:1.3; }
+  .meta { color:var(--muted); font-size:13px; margin-top:2px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:16px 0; }
+  .banner { border-radius:10px; padding:10px 14px; margin:14px 0; font-size:13.5px; border:1px solid transparent; }
+  .banner.ok { background:var(--ok-soft); color:var(--ok); } .banner.warn { background:var(--warn-soft); color:var(--warn); }
+  .banner.info { background:var(--info-soft); color:var(--info); } .banner.plain { background:var(--panel2); border-color:var(--line); color:var(--muted); }
+  .scores { display:flex; gap:18px; flex-wrap:wrap; margin:10px 0 0; }
+  .score .l { color:var(--muted); font-size:11.5px; } .score .v { font-weight:700; font-variant-numeric:tabular-nums; }
+  .bar { width:90px; height:5px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:3px; }
+  .bar i { display:block; height:100%; background:var(--accent); }
+  h3 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:22px 0 8px; }
+  table { border-collapse:collapse; width:100%; }
+  td, th { text-align:left; padding:8px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { color:var(--muted); font-weight:500; font-size:12px; }
-  td.v input, td.v textarea, td.v select { width:100%; font:inherit; padding:6px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); }
-  td.v textarea { min-height:90px; }
+  td.q { width:38%; } td.flag { width:90px; text-align:right; }
+  td.v input, td.v textarea, td.v select, textarea.big { width:100%; font:inherit; padding:7px 9px; border:1px solid var(--line); border-radius:8px; background:var(--panel2); color:var(--text); }
+  td.v textarea { min-height:100px; } textarea.big { min-height:240px; }
   .need { color:var(--warn); font-weight:600; }
   .note { color:var(--muted); font-size:12px; }
-  img.shot { max-width:100%; border:1px solid var(--line); border-radius:8px; }
-  #msg { position:fixed; bottom:16px; right:16px; background:var(--panel); border:1px solid var(--line); padding:10px 14px; border-radius:8px; display:none; max-width:420px; }
-  .help { color:var(--muted); font-size:12px; }
-  @media (max-width: 760px) { main { grid-template-columns:1fr; height:auto; } #list { max-height:40vh; } #detail { padding:16px; } }
+  details summary { cursor:pointer; color:var(--accent); margin:16px 0 8px; }
+  img.shot { max-width:100%; border:1px solid var(--line); border-radius:10px; }
+  pre.mail { white-space:pre-wrap; font:inherit; background:var(--panel2); border:1px solid var(--line); padding:12px 14px; border-radius:10px; max-height:38vh; overflow:auto; margin:0; }
+  .empty { padding:40px 20px; text-align:center; color:var(--muted); }
+  .empty b { display:block; color:var(--text); font-size:15px; margin-bottom:4px; }
+  .kbd { font-size:11px; border:1px solid currentColor; border-radius:4px; padding:0 4px; opacity:.7; }
+  nav button { white-space:nowrap; }
+  #msg { position:fixed; bottom:18px; right:18px; background:var(--text); color:var(--panel); padding:10px 16px; border-radius:10px; display:none; max-width:440px; box-shadow:0 8px 24px rgba(0,0,0,.2); z-index:9; }
+  @media (max-width: 1000px) { .stats { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+  @media (max-width: 760px) {
+    header { padding:10px 16px; } .hdr-actions { margin-left:0; width:100%; }
+    .stats { padding:12px 16px 0; grid-template-columns:repeat(2, minmax(0,1fr)); } .autobar { padding:8px 16px 0; }
+    main { grid-template-columns:1fr; padding:12px 16px 16px; } #side { max-height:45vh; } #detail { padding:16px; }
+    td.q { width:auto; } .dh .av { display:none; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>Job Sprint review</h1>
-  <div class="tabs"><button data-tab="jobs" class="on">Applications</button><button data-tab="emails">Recruiter emails</button><button data-tab="platforms">AI platforms</button></div>
-  <span class="help">Keys: ↑/↓ move · Enter submit · Backspace skip</span>
-  <span id="counts"></span>
-  <button class="btn primary" id="sendall" title="Send every complete application now">Send all ready</button>
+  <div class="brand"><span class="logo">JS</span>Job Sprint</div>
+  <nav>
+    <button data-tab="jobs" class="on">Applications</button>
+    <button data-tab="emails">Recruiter emails<span class="badge" id="ebadge" hidden></span></button>
+    <button data-tab="platforms">AI platforms</button>
+  </nav>
+  <div class="hdr-actions">
+    <button class="btn" id="runlogin" title="Opens a browser where you sign in to Google and job sites once">Sign in to sites</button>
+    <button class="btn" id="runsprint" title="Reads your inbox, finds new jobs, fills forms and sends the complete ones">Find &amp; apply now</button>
+    <button class="btn primary" id="sendall" title="Send every complete application now">Send all ready</button>
+  </div>
 </header>
+<section class="stats" id="stats"></section>
+<div class="autobar" id="autobar"></div>
 <main>
-  <div id="list"></div>
-  <div id="detail"><p class="note">Loading…</p></div>
+  <aside class="card" id="side">
+    <div class="tools">
+      <input class="search" id="q" placeholder="Search title or company" aria-label="Search">
+      <div class="filters" id="filters"></div>
+    </div>
+    <div id="list"></div>
+  </aside>
+  <section class="card" id="detail"><p class="note">Loading…</p></section>
 </main>
-<div id="msg"></div>
+<div id="msg" role="status"></div>
 <script>
-let items = [], cur = 0, tab = "jobs", busy = false;
+let items = [], cur = 0, tab = "jobs", busy = false, filter = "todo", query = "", summary = null;
+let emails = [], ecur = 0;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const say = (t, ms = 4000) => { const m = $("#msg"); m.textContent = t; m.style.display = "block"; clearTimeout(say.t); say.t = setTimeout(() => m.style.display = "none", ms); };
-const CHIPS = { READY_TO_SUBMIT: '<span class="chip ok">ready</span>', NEEDS_USER_INPUT: '<span class="chip warn">needs you</span>',
-  NEEDS_LOGIN: '<span class="chip warn">sign in once</span>', SENT_UNCONFIRMED: '<span class="chip warn">sent? check</span>' };
-const stateChip = s => CHIPS[s] || '<span class="chip">apply yourself</span>';
-const kindChip = it => (it.form_url || "").startsWith("mailto:") ? '<span class="chip">by email</span>' : "";
+const initial = s => esc((String(s || "?").trim()[0] || "?").toUpperCase());
+const isMail = it => (it.form_url || "").startsWith("mailto:");
+const host = u => { try { return u.startsWith("mailto:") ? u.slice(7) : new URL(u).host.replace(/^www\./, ""); } catch { return ""; } };
+const ago = iso => { if (!iso) return ""; const h = (Date.now() - new Date(iso)) / 36e5; return h < 1 ? "just now" : h < 24 ? `${Math.round(h)}h ago` : `${Math.round(h / 24)}d ago`; };
+
+const STATE = {
+  READY_TO_SUBMIT:  { chip: "ok",   label: "ready",          group: "ready" },
+  NEEDS_USER_INPUT: { chip: "warn", label: "needs you",      group: "needs" },
+  NEEDS_LOGIN:      { chip: "info", label: "sign in once",   group: "login" },
+  MANUAL_APPLY:     { chip: "",     label: "apply yourself", group: "manual" },
+  SENT_UNCONFIRMED: { chip: "warn", label: "sent? check",    group: "sent" },
+  SUBMITTED:        { chip: "ok",   label: "sent",           group: "sent" },
+};
+const FILTERS = [["todo", "To do"], ["ready", "Ready"], ["needs", "Needs you"], ["login", "Sign in"], ["manual", "Apply yourself"], ["sent", "Sent"], ["all", "All"]];
+const inFilter = it => { const g = (STATE[it.state] || {}).group; return filter === "all" || (filter === "todo" ? g !== "sent" : g === filter); };
+const stateChip = s => { const d = STATE[s] || { chip: "", label: s }; return `<span class="chip ${d.chip}">${d.label}</span>`; };
 
 async function load() {
   const [list, sum] = await Promise.all([fetch("/api/staged").then(r => r.json()), fetch("/api/summary").then(r => r.json())]);
-  items = list; cur = Math.min(cur, Math.max(0, items.length - 1));
-  const f = sum.forms;
-  $("#counts").textContent = `${f.READY_TO_SUBMIT || 0} ready · ${f.NEEDS_USER_INPUT || 0} need you · ${f.MANUAL_APPLY || 0} apply yourself · ${f.NEEDS_LOGIN || 0} need a sign-in · ${(f.SUBMITTED || 0) + (f.SENT_UNCONFIRMED || 0)} sent`;
-  render();
+  items = list; summary = sum;
+  renderTop(); render();
+}
+
+function renderTop() {
+  const f = summary.forms, st = summary.settings || {}, sent = summary.sent_today || {};
+  const tiles = [["ready", "ok", f.READY_TO_SUBMIT, "Ready to send"], ["needs", "warn", f.NEEDS_USER_INPUT, "Need your answers"],
+    ["login", "info", f.NEEDS_LOGIN, "Need a sign-in"], ["manual", "", f.MANUAL_APPLY, "Apply yourself"],
+    ["sent", "ok", (sent.forms || 0) + (sent.email || 0), "Sent today"], ["sent", "", (f.SUBMITTED || 0) + (f.SENT_UNCONFIRMED || 0), "Sent in total"]];
+  $("#stats").innerHTML = tiles.map(([g, c, n, l]) => `<button class="stat ${c}" data-g="${g}"><div class="n">${n || 0}</div><div class="l">${l}</div></button>`).join("");
+  document.querySelectorAll(".stat").forEach(b => b.onclick = () => { switchTab("jobs"); filter = b.dataset.g; cur = 0; render(); });
+  const lr = summary.last_run;
+  const task = summary.task || {};
+  $("#autobar").innerHTML = `
+    <span><span class="dot ${st.auto_forms ? "on" : ""}"></span>Forms: ${st.auto_forms ? `auto-send, up to ${st.forms_per_day}/day (${sent.forms || 0} today)` : "wait for you"}</span>
+    <span><span class="dot ${st.auto_email ? "on" : ""}"></span>Email applications: ${st.auto_email ? `auto-send, up to ${st.email_per_day}/day (${sent.email || 0} today)` : "wait for you"}</span>
+    <span><span class="dot ${st.google ? "on" : ""}"></span>Continue with Google: ${st.google ? "on" : "off"}</span>
+    ${lr ? `<span>Last run: ${esc(lr.mode)} ${ago(lr.finished_at || lr.started_at)}${lr.jobs_found ? `, ${lr.jobs_kept} of ${lr.jobs_found} jobs kept` : ""}</span>` : ""}
+    ${task.running ? `<span class="need">Running now: ${task.what === "login" ? "sign-in window" : "find &amp; apply"}…</span>` : ""}`;
+  const b = $("#ebadge"); b.hidden = !summary.emails_waiting; b.textContent = summary.emails_waiting || "";
+  $("#runsprint").disabled = $("#runlogin").disabled = !!task.running;
+}
+
+function visible() {
+  const q = query.toLowerCase();
+  return items.filter(it => inFilter(it) && (!q || `${it.title} ${it.company}`.toLowerCase().includes(q)));
 }
 
 function render() {
   if (tab === "platforms") return renderPlatforms();
   if (tab === "emails") return renderEmails();
-  $("#list").innerHTML = items.map((it, i) => `
+  $("#filters").innerHTML = FILTERS.map(([k, l]) => {
+    const n = k === "all" ? items.length : items.filter(it => { const g = (STATE[it.state] || {}).group; return k === "todo" ? g !== "sent" : g === k; }).length;
+    return `<button data-f="${k}" class="${filter === k ? "on" : ""}">${l} ${n}</button>`;
+  }).join("");
+  document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filter = b.dataset.f; cur = 0; render(); });
+  const vis = visible();
+  cur = Math.min(cur, Math.max(0, vis.length - 1));
+  $("#list").innerHTML = vis.map((it, i) => `
     <div class="item ${i === cur ? "on" : ""}" data-i="${i}">
-      <div class="t">${esc(it.title)}</div><div class="c">${esc(it.company || "")}</div>
-      <div class="chips">${stateChip(it.state)}${kindChip(it)}<span class="chip">${Math.round(it.age_hours)}h old</span>
-        <span class="chip ${it.applicant_count != null && it.applicant_count <= 25 ? "ok" : ""}">${it.applicant_count == null ? "applicants ?" : it.applicant_count + " applicants"}</span>
-        <span class="chip">${esc(it.track || "")}</span></div>
-    </div>`).join("") || '<p class="note" style="padding:14px">Nothing staged yet. Run the sprint first.</p>';
+      <div class="av">${initial(it.company)}</div>
+      <div style="min-width:0">
+        <div class="t">${esc(it.title)}</div><div class="c">${esc(it.company || "")}${it.location ? " · " + esc(it.location) : ""}</div>
+        <div class="chips">${stateChip(it.state)}${isMail(it) ? '<span class="chip">by email</span>' : ""}
+          <span class="chip">${Math.round(it.age_hours || 0)}h old</span>
+          ${it.applicant_count != null ? `<span class="chip ${it.applicant_count <= 25 ? "ok" : ""}">${it.applicant_count} applicants</span>` : ""}</div>
+      </div>
+    </div>`).join("") || `<div class="empty"><b>Nothing here</b>${filter === "todo" ? "Press Find &amp; apply now to look for new jobs." : "Try another filter."}</div>`;
   document.querySelectorAll(".item").forEach(el => el.onclick = () => { cur = +el.dataset.i; render(); });
-  const it = items[cur];
-  if (!it) { $("#detail").innerHTML = '<p class="note">Nothing to review.</p>'; return; }
-  const rows = it.answers.map((a, k) => {
+  renderDetail(vis[cur]);
+}
+
+function banner(it) {
+  const h = host(it.form_url || it.url);
+  switch (it.state) {
+    case "READY_TO_SUBMIT": return isMail(it)
+      ? `<div class="banner ok">Ready. This job takes applications by email: your CV and the cover letter below go to <b>${esc(h)}</b>.</div>`
+      : `<div class="banner ok">Ready. Every required question is answered and your tailored CV is attached.</div>`;
+    case "NEEDS_USER_INPUT": return `<div class="banner warn">Answer the questions marked <b>needs you</b>, then press Submit.</div>`;
+    case "NEEDS_LOGIN": return `<div class="banner info"><b>${esc(h)}</b> wants you signed in. Press <b>Sign in to sites</b> once (Continue with Google works); the next run fills this form. Or apply yourself with the tailored CV.</div>`;
+    case "MANUAL_APPLY": return `<div class="banner plain">No form the agent can fill. Open the application and use your tailored CV.</div>`;
+    case "SENT_UNCONFIRMED": return `<div class="banner warn">Submit was pressed but no thank-you page appeared. Check the screenshot; it won't be sent again.</div>`;
+    case "SUBMITTED": return `<div class="banner ok">Sent ${ago(it.submitted_at)}${it.error ? ": " + esc(it.error) : ""}.</div>`;
+  }
+  return "";
+}
+
+function answerRows(it) {
+  const editable = ["READY_TO_SUBMIT", "NEEDS_USER_INPUT"].includes(it.state);
+  return it.answers.filter(a => !(isMail(it) && a.label === "Cover letter")).map(a => {
     let v;
-    if (a.consent) v = `<label><input type="checkbox" data-consent="${esc(a.label)}"> I agree (you must tick this yourself)</label>`;
+    if (a.consent) v = editable ? `<label><input type="checkbox" data-consent="${esc(a.label)}"> I agree</label>` : esc(a.value ?? "");
     else if (a.kind === "file") v = esc(a.value || "") + (a.value ? "" : ' <span class="need">left empty</span>');
-    else if (a.needs_user || a.source === "ai_draft" || (it.form_url || "").startsWith("mailto:")) {
+    else if (editable && (a.needs_user || a.source === "ai_draft")) {
       if (a.options && a.options.length) v = `<select data-ov="${esc(a.label)}"><option value="">Choose…</option>${a.options.map(o => `<option ${o === a.value ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
       else if (a.kind === "textarea" || a.source === "ai_draft") v = `<textarea data-ov="${esc(a.label)}">${esc(a.value || "")}</textarea>`;
       else v = `<input data-ov="${esc(a.label)}" value="${esc(a.value || "")}">`;
     } else v = esc(a.value ?? "");
-    const flag = a.needs_user ? '<span class="need">needs you</span>' : a.source === "ai_draft" ? '<span class="chip warn">AI draft</span>' : `<span class="note">${esc(a.source || "")}</span>`;
-    return `<tr><td>${esc(a.label)}${a.required ? " *" : ""}<div class="note">${esc(a.note || "")}</div></td><td class="v">${v}</td><td>${flag}</td></tr>`;
+    const flag = a.needs_user ? '<span class="chip warn">needs you</span>' : a.consent ? '<span class="chip info">consent</span>'
+      : a.source === "ai_draft" ? '<span class="chip info">AI draft</span>' : `<span class="note">${esc(a.source || "")}</span>`;
+    return `<tr><td class="q">${esc(a.label)}${a.required ? " *" : ""}${a.note ? `<div class="note">${esc(a.note)}</div>` : ""}</td><td class="v">${v}</td><td class="flag">${flag}</td></tr>`;
   }).join("");
-  const manual = ["MANUAL_APPLY", "NEEDS_LOGIN", "SENT_UNCONFIRMED"].includes(it.state);
+}
+
+function renderDetail(it) {
+  if (!it) { $("#detail").innerHTML = `<div class="empty"><b>Nothing to review</b>New jobs appear here after each run.</div>`; return; }
+  const canSubmit = ["READY_TO_SUBMIT", "NEEDS_USER_INPUT"].includes(it.state);
+  const open = ["MANUAL_APPLY", "NEEDS_LOGIN", "SENT_UNCONFIRMED"].includes(it.state);
+  const letter = isMail(it) ? (it.answers.find(a => a.label === "Cover letter") || {}).value : null;
+  const rows = answerRows(it);
+  const pct = x => Math.round((x || 0) * 100);
   $("#detail").innerHTML = `
-    <h2>${esc(it.title)}</h2>
-    <div class="note">${esc(it.company || "")} · ${esc(it.location || "")} · priority ${(it.priority_score || 0).toFixed(2)} · fit ${(it.fit_score || 0).toFixed(2)} · from ${esc(it.source)}</div>
+    <div class="dh"><div class="av">${initial(it.company)}</div><div style="min-width:0">
+      <h2>${esc(it.title)}</h2>
+      <div class="meta">${esc(it.company || "")}${it.location ? " · " + esc(it.location) : ""} · posted ${Math.round(it.age_hours || 0)}h ago · via ${esc(host(it.url) || it.source)}</div>
+      <div class="scores">
+        <div class="score"><div class="l">Priority</div><div class="v">${pct(it.priority_score)}</div><div class="bar"><i style="width:${pct(it.priority_score)}%"></i></div></div>
+        <div class="score"><div class="l">Fit</div><div class="v">${pct(it.fit_score)}</div><div class="bar"><i style="width:${pct(it.fit_score)}%"></i></div></div>
+        <div class="score"><div class="l">Applicants</div><div class="v">${it.applicant_count ?? "?"}</div></div>
+        <div class="score"><div class="l">CV track</div><div class="v">${esc(it.track || "")}</div></div>
+      </div></div></div>
+    ${banner(it)}
     <div class="row">
-      ${manual ? `<a class="btn primary" href="${esc(it.form_url || it.url)}" target="_blank" rel="noopener">Open application</a>
-                  <button class="btn" id="done">${it.state === "SENT_UNCONFIRMED" ? "Yes, it was sent" : "I applied myself"}</button>`
-               : `<button class="btn primary" id="submit">Submit (Enter)</button>`}
-      <button class="btn" id="skip">Skip (Backspace)</button>
-      ${it.has_cv ? `<a class="btn" href="/files/cv/${it.id}">Download tailored CV</a>` : ""}
+      ${canSubmit ? `<button class="btn primary" id="submit">${isMail(it) ? "Send email application" : "Submit"} <span class="kbd">Enter</span></button>` : ""}
+      ${open ? `<a class="btn primary" href="${esc(it.form_url && !isMail(it) ? it.form_url : it.url)}" target="_blank" rel="noopener">Open application</a>
+                <button class="btn" id="done">${it.state === "SENT_UNCONFIRMED" ? "Yes, it was sent" : "I applied myself"}</button>` : ""}
+      ${it.has_cv ? `<a class="btn" href="/files/cv/${it.id}">Download CV</a>` : ""}
       <a class="btn" href="${esc(it.url)}" target="_blank" rel="noopener">Job post</a>
+      ${it.state !== "SUBMITTED" ? `<button class="btn ghost" id="skip">Skip <span class="kbd">⌫</span></button>` : ""}
     </div>
-    ${it.error ? `<p class="note">${esc(it.error)}</p>` : ""}
-    ${it.missing.length ? `<p class="need">Fill these before submitting: ${it.missing.map(esc).join(", ")}</p>` : ""}
-    ${it.matched_keywords ? `<p class="note">CV keywords matched: ${esc(it.matched_keywords)}</p>` : ""}
-    ${rows ? `<table><tr><th>Question</th><th>Answer</th><th></th></tr>${rows}</table>` : ""}
-    ${it.has_shot ? `<p class="note">Screenshot of the filled form, taken before Submit:</p><img class="shot" src="/files/screenshot/${it.id}" alt="Filled application form">` : ""}`;
-  $("#skip").onclick = skip;
+    ${it.missing.length ? `<p class="need">Still needed: ${it.missing.map(esc).join(", ")}</p>` : ""}
+    ${letter != null ? `<h3>Cover letter</h3><textarea class="big" data-ov="Cover letter" ${canSubmit ? "" : "readonly"}>${esc(letter)}</textarea>` : ""}
+    ${rows ? `<h3>${isMail(it) ? "Email" : "Answers on the form"}</h3><table>${rows}</table>` : ""}
+    ${it.matched_keywords ? `<h3>CV keywords matched</h3><div class="chips">${String(it.matched_keywords).split(/,\s*/).slice(0, 24).map(k => `<span class="chip">${esc(k)}</span>`).join("")}</div>` : ""}
+    ${it.has_shot ? `<details><summary>Screenshot of the filled form</summary><img class="shot" src="/files/screenshot/${it.id}" alt="Filled application form"></details>` : ""}`;
+  if ($("#skip")) $("#skip").onclick = skip;
   if ($("#submit")) $("#submit").onclick = submit;
-  if ($("#done")) $("#done").onclick = () => post(`/api/applied_myself/${it.id}`).then(() => { say("Marked as applied."); load(); });
+  if ($("#done")) $("#done").onclick = () => post(`/api/applied_myself/${it.id}`).then(() => { say("Marked as sent."); load(); });
+}
+
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+async function submit() {
+  const it = visible()[cur]; if (!it || busy || !["READY_TO_SUBMIT", "NEEDS_USER_INPUT"].includes(it.state)) return;
+  const overrides = {}, consents = [];
+  document.querySelectorAll("[data-ov]").forEach(el => { if (el.value) overrides[el.dataset.ov] = el.value; });
+  document.querySelectorAll("[data-consent]").forEach(el => { if (el.checked) consents.push(el.dataset.consent); });
+  const unticked = [...document.querySelectorAll("[data-consent]")].filter(e => !e.checked).length;
+  if (unticked && !confirm(`${unticked} consent box(es) are not ticked. The form may refuse to submit. Continue?`)) return;
+  busy = true; say(isMail(it) ? "Sending the email…" : "Submitting… a browser window opens. Solve any CAPTCHA there.", 60000);
+  try {
+    const r = await post(`/api/submit/${it.id}`, { overrides, consents });
+    say(r.ok ? "Sent." : "Not sent: " + (r.error || "unknown"), 8000);
+  } catch (e) { say("Error: " + e.message, 8000); }
+  busy = false; load();
+}
+
+async function skip() {
+  const it = visible()[cur]; if (!it || busy) return;
+  await post(`/api/skip/${it.id}`); say("Skipped."); load();
 }
 
 $("#sendall").onclick = async () => {
@@ -134,80 +313,74 @@ $("#sendall").onclick = async () => {
       say(`Done: ${r.sent || 0} sent, ${r.not_confirmed || 0} sent without a thank-you page, ${r.failed || 0} failed, ${r.waiting_for_you || 0} still need you.`, 15000); load(); }
   }, 4000);
 };
+const runTask = async (what, text) => {
+  try { await post(`/api/run/${what}`); say(text, 12000); } catch (e) { say("Error: " + e.message, 8000); }
+  load();
+};
+$("#runsprint").onclick = () => confirm("Read your inbox, find new jobs, fill forms and send the complete ones now?") &&
+  runTask("sprint", "Started in a new window. This page refreshes as results come in.");
+$("#runlogin").onclick = () => runTask("login", "A browser opened. Sign in to Google first, then use Continue with Google on each site. Close it when done.");
+setInterval(() => { if (tab === "jobs" && !busy && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) load(); }, 30000);
 
-let emails = [], ecur = 0;
 async function renderEmails() {
   emails = await fetch("/api/emails").then(r => r.json());
+  $("#filters").innerHTML = ""; $("#q").hidden = true;
   ecur = Math.min(ecur, Math.max(0, emails.length - 1));
   $("#list").innerHTML = emails.map((m, i) => `
     <div class="item ${i === ecur ? "on" : ""}" data-e="${i}">
-      <div class="t">${esc(m.subject || "(no subject)")}</div><div class="c">${esc(m.from_name || m.from_addr)}</div>
-      <div class="chips">${m.state === "SENT" ? '<span class="chip ok">replied</span>' : '<span class="chip warn">draft ready</span>'}
-        <span class="chip">${esc((m.category || "other").replace("_", " "))}</span></div>
-    </div>`).join("") || '<p class="note" style="padding:14px">No recruiter emails in the last day.</p>';
+      <div class="av">${initial(m.from_name || m.from_addr)}</div>
+      <div style="min-width:0"><div class="t">${esc(m.subject || "(no subject)")}</div><div class="c">${esc(m.from_name || m.from_addr)} · ${ago(m.received_at)}</div>
+      <div class="chips">${m.state === "SENT" ? '<span class="chip ok">replied</span>' : (m.draft_reply || "").includes("[FILL IN") ? '<span class="chip warn">needs you</span>' : '<span class="chip info">draft ready</span>'}
+        <span class="chip">${esc((m.category || "other").replace("_", " "))}</span></div></div>
+    </div>`).join("") || '<div class="empty"><b>No recruiter emails</b>Replies to recruiters show up here.</div>';
   document.querySelectorAll("[data-e]").forEach(el => el.onclick = () => { ecur = +el.dataset.e; renderEmails(); });
   const m = emails[ecur];
-  if (!m) { $("#detail").innerHTML = '<p class="note">Nothing here yet.</p>'; return; }
-  const sent = m.state === "SENT";
+  if (!m) { $("#detail").innerHTML = '<div class="empty"><b>Nothing here yet</b>The agent checks your inbox on every run.</div>'; return; }
+  const sent = m.state === "SENT", gap = (m.draft_reply || "").includes("[FILL IN");
   $("#detail").innerHTML = `
-    <h2>${esc(m.subject || "(no subject)")}</h2>
-    <div class="note">From ${esc(m.from_name || "")} &lt;${esc(m.from_addr)}&gt; · ${esc(m.received_at || "")}</div>
-    <pre style="white-space:pre-wrap;font:inherit;background:var(--panel);border:1px solid var(--line);padding:12px;border-radius:8px;max-height:40vh;overflow:auto">${esc(m.body_text || "")}</pre>
-    <p class="note">${sent ? "Your reply (sent " + esc(m.sent_at) + "):" : "Draft reply. Edit it, replace any [FILL IN ...] gaps, then press Send. Nothing is sent until you do."}</p>
-    <textarea id="reply" style="width:100%;min-height:220px" ${sent ? "readonly" : ""}>${esc(m.draft_reply || "")}</textarea>
-    <div class="row">${sent ? "" : '<button class="btn primary" id="esend">Send reply</button><button class="btn" id="edismiss">Not a recruiter, hide</button>'}</div>`;
+    <div class="dh"><div class="av">${initial(m.from_name || m.from_addr)}</div><div style="min-width:0">
+      <h2>${esc(m.subject || "(no subject)")}</h2>
+      <div class="meta">${esc(m.from_name || "")} &lt;${esc(m.from_addr)}&gt; · ${ago(m.received_at)} · ${esc((m.category || "other").replace("_", " "))}</div></div></div>
+    ${sent ? `<div class="banner ok">Replied ${ago(m.sent_at)}.</div>`
+      : gap ? `<div class="banner warn">Fill the [FILL IN …] gaps, then press Send. Drafts with gaps are never sent automatically.</div>`
+            : `<div class="banner info">Draft ready. It's sent on the next run if automatic replies are on, or press Send now.</div>`}
+    <h3>Their email</h3><pre class="mail">${esc(m.body_text || "")}</pre>
+    <h3>${sent ? "Your reply" : "Your reply (edit freely)"}</h3>
+    <textarea class="big" id="reply" ${sent ? "readonly" : ""}>${esc(m.draft_reply || "")}</textarea>
+    <div class="row">${sent ? "" : '<button class="btn primary" id="esend">Send reply</button><button class="btn ghost" id="edismiss">Not a recruiter, hide</button>'}</div>`;
   if (!sent) {
     $("#esend").onclick = async () => {
       if (!confirm(`Send this reply to ${m.from_addr}?`)) return;
       try { const r = await post(`/api/emails/${m.id}/send`, { body: $("#reply").value }); say(r.ok ? "Reply sent." : "Not sent: " + r.error, 8000); }
       catch (e) { say("Error: " + e.message, 8000); }
-      renderEmails();
+      renderEmails(); load();
     };
     $("#edismiss").onclick = () => post(`/api/emails/${m.id}/dismiss`).then(renderEmails);
   }
 }
 
-async function post(url, body) {
-  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
-  return r.json();
-}
-
-async function submit() {
-  const it = items[cur]; if (!it || busy || !["READY_TO_SUBMIT", "NEEDS_USER_INPUT"].includes(it.state)) return;
-  const overrides = {}, consents = [];
-  document.querySelectorAll("[data-ov]").forEach(el => { if (el.value) overrides[el.dataset.ov] = el.value; });
-  document.querySelectorAll("[data-consent]").forEach(el => { if (el.checked) consents.push(el.dataset.consent); });
-  const unticked = [...document.querySelectorAll("[data-consent]")].filter(e => !e.checked).length;
-  if (unticked && !confirm(`${unticked} consent box(es) are not ticked. The form may refuse to submit. Continue?`)) return;
-  busy = true; say("Submitting… a browser window opens. Solve any CAPTCHA there.", 60000);
-  try {
-    const r = await post(`/api/submit/${it.id}`, { overrides, consents });
-    say(r.ok ? "Submitted." : "Not submitted: " + (r.error || "unknown"), 8000);
-  } catch (e) { say("Error: " + e.message, 8000); }
-  busy = false; load();
-}
-
-async function skip() {
-  const it = items[cur]; if (!it || busy) return;
-  await post(`/api/skip/${it.id}`); say("Skipped."); load();
-}
-
 async function renderPlatforms() {
   const ps = await fetch("/api/platforms").then(r => r.json());
-  $("#list").innerHTML = '<p class="note" style="padding:14px">These platforms take one standing application instead of dated job posts.</p>';
-  $("#detail").innerHTML = `<h2>AI training platforms</h2><table><tr><th>Platform</th><th>Status</th><th></th></tr>${ps.map(p => `
-    <tr><td><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a></td><td>${esc(p.status)}</td>
-    <td>${p.status === "NOT_APPLIED" ? `<button class="btn" data-p="${esc(p.name)}">Mark applied</button>` : ""}</td></tr>`).join("")}</table>`;
+  $("#filters").innerHTML = ""; $("#q").hidden = true;
+  $("#list").innerHTML = '<div class="empty"><b>AI training platforms</b>These take one standing application instead of dated job posts. Apply once, then mark it.</div>';
+  $("#detail").innerHTML = `<h2>AI training platforms</h2><p class="meta">${ps.filter(p => p.status !== "NOT_APPLIED").length} of ${ps.length} done</p>
+    <table><tr><th>Platform</th><th>Status</th><th></th></tr>${ps.map(p => `
+    <tr><td><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a></td>
+    <td>${p.status === "NOT_APPLIED" ? '<span class="chip warn">not applied</span>' : '<span class="chip ok">applied</span>'}</td>
+    <td style="text-align:right">${p.status === "NOT_APPLIED" ? `<button class="btn" data-p="${esc(p.name)}">Mark applied</button>` : ""}</td></tr>`).join("")}</table>`;
   document.querySelectorAll("[data-p]").forEach(b => b.onclick = async () => { await post(`/api/platforms/${encodeURIComponent(b.dataset.p)}`, { status: "APPLIED" }); renderPlatforms(); });
 }
 
-document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
-  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b)); tab = b.dataset.tab; render();
-});
+function switchTab(t) {
+  tab = t; $("#q").hidden = t !== "jobs";
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x.dataset.tab === t));
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => { switchTab(b.dataset.tab); render(); });
+$("#q").oninput = e => { query = e.target.value; cur = 0; render(); };
 document.addEventListener("keydown", e => {
   if (tab !== "jobs" || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
-  if (e.key === "ArrowDown") { cur = Math.min(items.length - 1, cur + 1); render(); e.preventDefault(); }
+  const n = visible().length;
+  if (e.key === "ArrowDown") { cur = Math.min(n - 1, cur + 1); render(); e.preventDefault(); }
   if (e.key === "ArrowUp") { cur = Math.max(0, cur - 1); render(); e.preventDefault(); }
   if (e.key === "Enter") { submit(); e.preventDefault(); }
   if (e.key === "Backspace") { skip(); e.preventDefault(); }
