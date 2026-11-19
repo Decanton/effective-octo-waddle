@@ -326,8 +326,26 @@ def _safe(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", s or "").strip("_")[:40]
 
 
+BLOCKED_SITES = ("weworkremotely.com",)  # Kelly, 2026-11-19: subscription wall, never apply from it
+
+
+def blocked_site(job: dict) -> str | None:
+    from ..settings import load_settings
+    sites = tuple(load_settings().get("blocked_sites") or ()) + BLOCKED_SITES
+    for u in (job.get("url"), job.get("apply_url")):
+        host = urlparse(u or "").netloc.lower()
+        for s in sites:
+            if host == s or host.endswith("." + s):
+                return s
+    return None
+
+
 def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) -> str:
     jid = job["id"]
+    site = blocked_site(job)
+    if site:
+        db.set_job_status(conn, jid, "SKIPPED", f"{site} is on the blocked list (subscription wall)")
+        return "SKIPPED"
     cv_path, cv = build_cv(f"{job['title']}\n{job.get('description') or ''}",
                            ws.tailored_cvs / f"{jid}_{_safe(job.get('company'))}_{_safe(job['title'])}.docx",
                            profile=profile)

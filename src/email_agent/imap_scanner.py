@@ -46,7 +46,7 @@ RECRUITER = re.compile(r"\b(interview|recruit\w*|hiring|your (application|cv|res
 JOB_LINK = re.compile(r"linkedin\.com/(comm/)?jobs/view/|indeed\.com/(viewjob|rc/clk|pagead/clk|m/viewjob)|"
                       r"glassdoor\.[a-z.]+/(job-listing|partner/joblisting)|greenhouse\.io/|lever\.co/|ashbyhq\.com/|"
                       r"himalayas\.app/companies/[^/]+/jobs/|wellfound\.com/jobs/|workable\.com/|"
-                      r"brightermonday\.co\.ke/listings/|weworkremotely\.com/remote-jobs/", re.I)
+                      r"brightermonday\.co\.ke/listings/", re.I)
 CATEGORIES = [("interview_request", re.compile(r"\binterview|schedule a (call|chat)|availability|calendly", re.I)),
               ("assessment", re.compile(r"assessment|take-?home|coding (test|challenge)|test link", re.I)),
               ("rejection", re.compile(r"unfortunately|not (be )?moving forward|other candidates|regret to", re.I)),

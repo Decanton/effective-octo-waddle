@@ -19,7 +19,7 @@ searches:
   - {term: '"technical support engineer" OR "customer support engineer" OR "QA engineer"', track: software}
 
 # Free remote-job boards with exact posting times (see src/discovery/remote_boards.py).
-remote_boards: [remotive, remoteok, himalayas, jobicy, weworkremotely]
+remote_boards: [remotive, remoteok, himalayas, jobicy]  # We Work Remotely dropped: subscription wall
 
 # Kenyan job sites and blogs, plus more remote boards (src/discovery/more_boards.py).
 # Kenyan blogs often say "send your CV and cover letter to hr@...": those are emailed

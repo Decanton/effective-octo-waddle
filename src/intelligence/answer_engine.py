@@ -124,6 +124,9 @@ class AnswerEngine:
         if CONSENT.search(label) and q.kind in ("checkbox", "radio", "select"):
             return Answer(consent=True, needs_user=q.required, note="tick this yourself on the review page")
         if EEO.search(label):
+            mine = self._demographic(q, label)
+            if mine is not None:
+                return mine
             opt = next((o for o in q.options if DECLINE.search(o)), None)
             if opt:
                 return Answer(opt, "eeo")
@@ -160,6 +163,26 @@ class AnswerEngine:
         if q.kind in ("textarea", "text") and (OPEN_TEXT.search(label) or q.kind == "textarea"):
             return self._draft(q, job)
         return Answer(needs_user=q.required, note="no verified answer in your profile")
+
+    def _demographic(self, q: Question, label: str) -> Answer | None:
+        """Voluntary EEO questions answered from master_profile 'demographics' (Kelly, 2026-11-19)."""
+        d = self.p.get("demographics") or {}
+        opts = q.options or []
+        def first(rx):
+            return next((o for o in opts if re.search(rx, o, re.I) and not DECLINE.search(o)), None)
+        if re.search(r"veteran", label) and d.get("protected_veteran") is False:
+            o = first(r"\bnot\b.*veteran|\bno\b|i am not") if opts else "I am not a protected veteran"
+        elif re.search(r"disabilit", label) and d.get("disability") is False:
+            o = first(r"\bno\b|do not have|don.?t have|not have") if opts else "No, I do not have a disability"
+        elif re.search(r"hispanic|latino", label) and d.get("hispanic_or_latino") is False:
+            o = first(r"^\s*no\b|not hispanic|non-hispanic") if opts else "No"
+        elif re.search(r"\brace\b|racial|ethnic", label) and d.get("race"):
+            o = first(r"black|african") if opts else d["race"]
+        elif re.search(r"gender|\bsex\b", label) and d.get("gender"):
+            o = pick_option(opts, d["gender"]) if opts else d["gender"]
+        else:
+            return None
+        return Answer(o, "eeo") if o else None
 
     KENYA = re.compile(r"\b(kenya|kenyan|nairobi|mombasa|kisumu|nakuru|eldoret|east africa)\b", re.I)
     FOREIGN = re.compile(r"\b(u\.?s\.?a?|united states|america|canada|u\.?k\.?|united kingdom|britain|england|ireland|"

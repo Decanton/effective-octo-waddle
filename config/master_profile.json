@@ -856,11 +856,21 @@
     "low_applicants": 0.25,
     "max_age_hours": 48,
     "low_applicant_threshold": 25,
-    "track_bonus": {"ai_data": 0.15},
+    "track_bonus": {
+      "ai_data": 0.15
+    },
     "_track_bonus_rule": "AI training roles go first (Kelly, 2026-11-19)"
   },
   "workspace": {
     "desktop_folder_name": "JobSprintAgent",
     "daily_stage_target": 20
+  },
+  "demographics": {
+    "race": "Black or African American",
+    "hispanic_or_latino": false,
+    "protected_veteran": false,
+    "disability": false,
+    "gender": null,
+    "_rule": "Kelly, 2026-11-19: Black (from Kenya), not a veteran, no disability. Gender not given, so the 'decline' option is used."
   }
 }

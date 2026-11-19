@@ -51,7 +51,9 @@ def run(ws, run_id: int | None = None, sources=("email", "jobspy", "ats", "remot
         raw += more_boards.fetch(search_cfg)
     if "jobspy" in sources:
         raw += jobspy_fetcher.fetch(search_cfg)
-    log.info("Found %d postings in total. Applying the 24-hour rule and knockouts...", len(raw))
+    from ..automation.form_stager import blocked_site
+    raw = [j for j in raw if not blocked_site(j)]  # e.g. We Work Remotely (subscription wall)
+    log.info("Found %d postings in total. Applying the 48-hour rule and knockouts...", len(raw))
 
     ranked = rank(raw, profile, search_cfg, platform_cfg)
     top_n = int(search_cfg.get("jobspy", {}).get("linkedin_details_top_n", 60))

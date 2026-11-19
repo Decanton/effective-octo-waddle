@@ -76,3 +76,20 @@ def test_discovery_picks_the_application_form_not_the_search_box(tmp_path, monke
                          "<form><label for=a>First name</label><input id=a required><label for=b>Last name</label><input id=b required>"
                          "<label for=c>Resume</label><input id=c type=file></form>")
         assert [f["label"] for f in form_fields.discover(page)] == ["First name", "Last name", "Resume"]
+
+
+def test_we_work_remotely_is_blocked():
+    from src.automation.form_stager import blocked_site
+    assert blocked_site({"url": "https://weworkremotely.com/remote-jobs/acme-dev"}) == "weworkremotely.com"
+    assert blocked_site({"url": "https://x.com/a", "apply_url": "https://www.weworkremotely.com/a"}) == "weworkremotely.com"
+    assert blocked_site({"url": "https://jobs.lever.co/acme/1"}) is None
+
+
+def test_demographic_answers_from_profile():
+    import json
+    from src.intelligence.answer_engine import AnswerEngine, Question
+    e = AnswerEngine(json.load(open("config/master_profile.json")), use_llm=False)
+    q = lambda lab, o: e.answer(Question(label=lab, kind="select", options=o, required=True)).value
+    assert q("Veteran status", ["I am a protected veteran", "I am not a protected veteran", "Decline"]) == "I am not a protected veteran"
+    assert q("Disability", ["Yes, I have a disability", "No, I do not have a disability", "I don't want to answer"]) == "No, I do not have a disability"
+    assert q("Race", ["Asian", "Black or African American", "Decline to self-identify"]) == "Black or African American"

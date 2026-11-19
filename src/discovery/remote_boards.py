@@ -98,7 +98,7 @@ def parse_wwr(xml_text: str) -> list[dict]:
     return out
 
 
-def fetch(boards=("remotive", "remoteok", "himalayas", "jobicy", "weworkremotely"), timeout: float = 25) -> list[dict]:
+def fetch(boards=("remotive", "remoteok", "himalayas", "jobicy"), timeout: float = 25) -> list[dict]:
     sess = requests.Session()
     sess.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json, application/rss+xml, */*"})
     jobs = []
