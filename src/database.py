@@ -188,6 +188,11 @@ def finish_run(conn, run_id: int, **counts) -> None:
                  (now_iso(), *cols.values(), run_id))
 
 
+# Once a job reaches one of these, a later discovery run only refreshes its details, never its status.
+FINAL_STATUSES = ("SUBMITTED", "SENT_UNCONFIRMED", "READY_TO_SUBMIT", "NEEDS_USER_INPUT", "NEEDS_LOGIN",
+                  "NEEDS_MANUAL_OTP", "MANUAL_APPLY", "APPLIED_MANUALLY", "SKIPPED", "FAILED")
+
+
 def upsert_job(conn, job: dict, run_id: int | None = None) -> int:
     """Insert a job, or update it if the URL is already known. Returns the job id."""
     ts = now_iso()
@@ -197,7 +202,10 @@ def upsert_job(conn, job: dict, run_id: int | None = None) -> int:
     vals = {k: job.get(k) for k in fields}
     vals["status"] = vals["status"] or "NEW"
     row = conn.execute("SELECT id FROM jobs WHERE url = ?", (job["url"],)).fetchone()
+    row = conn.execute("SELECT id, status FROM jobs WHERE url = ?", (job["url"],)).fetchone()
     if row:
+        if row["status"] in FINAL_STATUSES:  # never pull an applied (or in-progress) job back into the queue
+            vals["status"], vals["status_reason"] = None, None
         sets = ", ".join(f"{k} = COALESCE(?, {k})" for k in fields)
         conn.execute(f"UPDATE jobs SET {sets}, updated_at = ? WHERE id = ?", (*vals.values(), ts, row["id"]))
         return row["id"]

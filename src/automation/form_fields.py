@@ -92,7 +92,7 @@ DISCOVER_JS = r"""
     const kind = el.tagName === 'SELECT' ? 'select' : el.tagName === 'TEXTAREA' ? 'textarea' :
                  (el.getAttribute('role') === 'combobox' ? 'combobox' : t);
     const options = el.tagName === 'SELECT' ? [...el.options].filter(o => o.value !== '').map(o => clean(o.text)) : [];
-    out.push({ id, kind, label: labelOf(el), options, required: req, name: el.name || '' });
+    out.push({ id, kind, label: labelOf(el), options, required: req, name: el.name || '', elid: el.id || '' });
   }
   return out;
 }
@@ -107,6 +107,12 @@ def discover(page, root: str | None = None, read_options: bool = True) -> list[d
     for f in fields:
         f["required"] = bool(f["required"] or "*" in f["label"])
         f["label"] = re.sub(r"\s*\*\s*$", "", f["label"]).strip()
+        if f["kind"] == "file" and not re.search(r"resume|\bcv\b|curriculum|cover", f["label"], re.I):
+            hint = f"{f.get('elid', '')} {f.get('name', '')}"
+            if re.search(r"resume|\bcv\b|curriculum", hint, re.I):  # e.g. Greenhouse's hidden #resume behind an "Attach" button
+                f["label"] = "Resume/CV"
+            elif re.search(r"cover", hint, re.I):
+                f["label"] = "Cover letter"
         if read_options and f["kind"] == "combobox" and not f["options"]:
             f["options"] = combo_options(page, page.locator(f'[data-jsa="{f["id"]}"]'))
     return fields

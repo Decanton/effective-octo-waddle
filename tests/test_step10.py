@@ -242,3 +242,24 @@ def test_ats_board_auto_kind_tries_each_system():
         def get(self, url, timeout=None):
             return R(404)
     assert f._fetch_board(N(), {"kind": "auto", "board": "nope"}, 5)[1] == "nope (auto:nope)"
+
+
+def test_rediscovery_never_requeues_a_sent_job(tmp_path):
+    from src import database as db
+    from src.workspace import ensure_workspace
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    with db.session(ws.db_path) as c:
+        jid = db.upsert_job(c, {"url": "https://jobs.ashbyhq.com/gravie/1", "source": "ashby:gravie", "title": "Manager EDI", "status": "QUALIFIED"})
+        db.set_job_status(c, jid, "SUBMITTED")
+        db.upsert_job(c, {"url": "https://jobs.ashbyhq.com/gravie/1", "source": "ashby:gravie", "title": "Manager EDI", "status": "QUALIFIED"})
+        assert c.execute("SELECT status FROM jobs WHERE id = ?", (jid,)).fetchone()[0] == "SUBMITTED"
+
+
+def test_title_only_jobs_and_phone_format():
+    from src.cv_tailor.single_template_tailor import load_profile
+    from src.intelligence.answer_engine import phone_for
+    from src.intelligence.job_ranker import fit_score
+    assert fit_score({"title": "Data Engineer", "description": ""}, load_profile())[0] >= 0.3
+    assert fit_score({"title": "Sales Manager", "description": ""}, load_profile())[0] < 0.22
+    assert phone_for("+254 706 921 015", "Tel (ex: 712 123456)") == "706 921 015"

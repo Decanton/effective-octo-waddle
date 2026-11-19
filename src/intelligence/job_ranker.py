@@ -102,7 +102,10 @@ def fit_score(job: dict, profile: dict) -> tuple[float, str]:
             skill_tokens |= _tokens(item)
     job_tokens = _tokens(text)
     skill_overlap = len(job_tokens & skill_tokens) / max(8, min(len(skill_tokens), 25))
-    score = 0.45 * min(1.0, kw_hits / 6) + 0.30 * min(1.0, title_hits / 2) + 0.25 * min(1.0, skill_overlap)
+    if len((job.get("description") or "").strip()) < 200:  # only a title to go on (e.g. a LinkedIn card): judge the title
+        score = 0.65 * min(1.0, title_hits / 1.5) + 0.35 * min(1.0, kw_hits / 3)
+    else:
+        score = 0.45 * min(1.0, kw_hits / 6) + 0.30 * min(1.0, title_hits / 2) + 0.25 * min(1.0, skill_overlap)
     if re.search(r"\bsenior\b|\bsr\.?\b|\blead\b", title_low):
         score *= 0.8  # four years of experience: senior roles are a stretch, not a knockout
     return round(score, 4), track

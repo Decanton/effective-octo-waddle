@@ -70,6 +70,16 @@ CONSENT = re.compile(r"\b(i agree|i consent|consent|privacy (policy|notice)|term
 OPEN_TEXT = re.compile(r"\b(why|tell us|describe|explain|what interests|motivat|cover letter|additional information|anything else|about yourself|summary|how would you|what makes you)", re.I)
 
 
+def phone_for(phone: str, label: str) -> str:
+    """Your number in the format the form shows: '+254 706 921 015', or '706 921 015' when the
+    example has no country code (e.g. 'Tel (ex: 712 123456)'), or '0706 921 015' when it starts with 0."""
+    m = re.search(r"(?:ex(?:ample)?|e\.g\.?|format)\W{0,3}([+0-9][0-9 ()-]{5,})", label or "", re.I)
+    if not m or m.group(1).strip().startswith("+"):
+        return phone
+    national = re.sub(r"^\+?254\s*", "", phone.strip())
+    return ("0" + national) if m.group(1).strip().startswith("0") else national
+
+
 def _yes_no_options(options: list[str]) -> bool:
     norm = {_norm(o).split(" ")[0].strip(",.") for o in options or []}
     return bool(options) and len(options) <= 4 and bool(norm & set(YES)) and bool(norm & set(NO))
@@ -89,7 +99,7 @@ class AnswerEngine:
             (r"\bpreferred (first )?name\b", lambda: per["first_name"], "profile"),
             (r"^(your )?(full |legal )?name$|\bfull name\b|\blegal name\b|^name\b", lambda: per["full_name"], "profile"),
             (r"\be-?mail\b", lambda: per["email"], "profile"),
-            (r"\b(phone|mobile|telephone|cell)\b", lambda: per["phone"], "profile"),
+            (r"\b(phone|mobile|telephone|cell|tel)\b", lambda: "__phone__", "profile"),
             (r"linkedin", lambda: per.get("linkedin"), "profile"),
             (r"github", lambda: per.get("github"), "profile"),
             (r"\b(portfolio|personal (web)?site|website|other link|url)\b", lambda: per.get("portfolio") or per.get("github"), "profile"),
@@ -143,6 +153,8 @@ class AnswerEngine:
         for pattern, getter, source in self.rules:
             if re.search(pattern, label):
                 val = getter()
+                if val == "__phone__":
+                    return Answer(phone_for(self.p["personal"]["phone"], q.label), source)
                 if val in ("__hourly__", "__salary__"):
                     return self._salary(q, label, job, hourly=val == "__hourly__")
                 if val in ("__sponsor__", "__authorized__"):

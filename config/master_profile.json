@@ -51,7 +51,13 @@
         "snorkel",
         "lidar",
         "computer vision",
-        "nlp"
+        "nlp",
+        "llm engineer",
+        "ai engineer",
+        "machine learning",
+        "ml engineer",
+        "data quality",
+        "quality analyst"
       ]
     },
     "software": {
@@ -86,7 +92,13 @@
         "bpm",
         "newgen",
         "data analyst",
-        "data engineer"
+        "data engineer",
+        "data platform",
+        "platform engineer",
+        "etl",
+        "data pipeline",
+        "software developer",
+        "web developer"
       ]
     },
     "mechanical": {
@@ -859,7 +871,8 @@
     "track_bonus": {
       "ai_data": 0.15
     },
-    "_track_bonus_rule": "AI training roles go first (Kelly, 2026-11-19)"
+    "_track_bonus_rule": "AI training roles go first (Kelly, 2026-11-19)",
+    "min_fit": 0.22
   },
   "workspace": {
     "desktop_folder_name": "JobSprintAgent",
