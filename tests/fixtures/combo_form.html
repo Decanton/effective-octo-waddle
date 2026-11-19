@@ -1,0 +1,39 @@
+<!doctype html><html><body>
+<form id="app">
+  <label for="first_name">First Name *</label><input id="first_name" required>
+  <label for="email">Email *</label><input id="email" type="email" required>
+  <div class="field"><label id="spon-label">Will you now or in the future require visa sponsorship? *</label>
+    <div class="select__container"><div class="select__value"></div>
+      <input id="spon" role="combobox" aria-autocomplete="list" aria-haspopup="true" aria-labelledby="spon-label" aria-required="true" aria-controls="spon-list">
+      <input class="remix-css-requiredInput" aria-hidden="true" tabindex="-1" required style="opacity:0;height:1px;width:1px">
+      <div id="spon-list" role="listbox" style="display:none"></div></div></div>
+  <div class="field"><label id="race-label">Race *</label>
+    <div class="select__container"><div class="select__value"></div>
+      <input id="race" role="combobox" aria-labelledby="race-label" aria-required="true" aria-controls="race-list">
+      <div id="race-list" role="listbox" style="display:none"></div></div></div>
+  <div class="field"><label id="city-label">Location (City) *</label>
+    <div class="select__container"><div class="select__value"></div>
+      <input id="city" role="combobox" aria-labelledby="city-label" aria-required="true" aria-controls="city-list" data-async="1">
+      <div id="city-list" role="listbox" style="display:none"></div></div></div>
+  <div><span>Autofill from resume</span><input type="file" style="display:none"></div>
+  <label for="_systemfield_resume">Resume *</label><input type="file" id="_systemfield_resume" style="display:none" required>
+  <div><input type="checkbox" id="adult" required style="position:absolute;opacity:0;width:0;height:0"><label for="adult">I am over 18 *</label></div>
+  <button type="submit">Submit application</button>
+</form>
+<script>
+const lists = {spon: ["Yes", "No"], race: ["Asian", "Black or African American", "White", "Decline to self-identify"],
+               city: ["Nairobi, Nairobi County, Kenya", "Nakuru, Kenya", "London, UK"]};
+for (const id of Object.keys(lists)) {
+  const inp = document.getElementById(id), lb = document.getElementById(id + '-list');
+  const val = inp.parentElement.querySelector('.select__value');
+  const mirror = inp.parentElement.querySelector('.remix-css-requiredInput');
+  const render = () => { const q = inp.value.toLowerCase(); lb.innerHTML = '';
+    const items = inp.dataset.async && !q ? [] : lists[id].filter(o => o.toLowerCase().includes(q));
+    for (const o of items) { const d = document.createElement('div'); d.setAttribute('role', 'option'); d.textContent = o;
+      d.onclick = () => { val.textContent = o; val.className = 'select__single-value'; inp.value = ''; if (mirror) mirror.value = o; lb.style.display = 'none'; };
+      lb.appendChild(d); }
+    lb.style.display = 'block'; };
+  inp.addEventListener('click', render); inp.addEventListener('input', render);
+  inp.addEventListener('keydown', e => { if (e.key === 'Escape') lb.style.display = 'none'; });
+}
+</script></body></html>

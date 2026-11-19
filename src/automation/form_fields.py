@@ -46,11 +46,16 @@ DISCOVER_JS = r"""
     }
     return clean(el.name);
   };
+  // A checkbox drawn as a toggle hides the real input; its label is what you see.
+  const labelVisible = el => { const l = (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)) || el.closest('label');
+    if (!l) return false; const r = l.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
   const out = []; const groups = {}; let n = 0;
   const root = pickRoot(rootSel);
   for (const el of root.querySelectorAll('input, textarea, select')) {
     const t = (el.type || el.tagName).toLowerCase();
-    if (['hidden', 'submit', 'button', 'reset', 'image', 'search'].includes(t) || el.disabled || !vis(el)) continue;
+    if (['hidden', 'submit', 'button', 'reset', 'image', 'search'].includes(t) || el.disabled) continue;
+    if (t !== 'file' && (el.getAttribute('aria-hidden') === 'true' || /requiredInput/i.test(el.className || ''))) continue;
+    if (!vis(el) && !((t === 'checkbox' || t === 'radio') && labelVisible(el))) continue;
     const req = el.required || el.getAttribute('aria-required') === 'true';
     if (t === 'radio' || (t === 'checkbox' && el.name && root.querySelectorAll(`input[type=checkbox][name="${CSS.escape(el.name)}"]`).length > 1)) {
       const key = t + ':' + el.name;
@@ -73,19 +78,95 @@ DISCOVER_JS = r"""
 TEXT_KINDS = {"text", "email", "tel", "url", "number", "textarea", "combobox", "date"}
 
 
-def discover(page, root: str | None = None) -> list[dict]:
+def discover(page, root: str | None = None, read_options: bool = True) -> list[dict]:
     """Fields of the application form (or of `root`, a CSS selector such as a modal)."""
     fields = page.evaluate(DISCOVER_JS, root)
     for f in fields:
         f["required"] = bool(f["required"] or "*" in f["label"])
         f["label"] = re.sub(r"\s*\*\s*$", "", f["label"]).strip()
+        if read_options and f["kind"] == "combobox" and not f["options"]:
+            f["options"] = combo_options(page, page.locator(f'[data-jsa="{f["id"]}"]'))
     return fields
+
+
+OPTION_SEL = "[role=option], [class*='option' i][id*='option' i]"
+
+
+def _listed(page, loc) -> list:
+    """The visible choices of an open dropdown (react-select, Greenhouse, Workable, ...)."""
+    try:
+        lb = loc.get_attribute("aria-controls") or loc.get_attribute("aria-owns")
+    except Exception:
+        lb = None
+    scope = page.locator(f"#{lb}") if lb and re.fullmatch(r"[A-Za-z][\w\-:.]*", lb) and page.locator(f"#{lb}").count() else page
+    try:
+        return [o for o in scope.locator(OPTION_SEL).all()[:300] if o.is_visible()]
+    except Exception:
+        return []
+
+
+def combo_options(page, loc) -> list[str]:
+    """Open a searchable dropdown, read its choices, close it again. [] if it only searches as you type."""
+    try:
+        loc.click(timeout=3000)
+        page.wait_for_timeout(500)
+        opts = [" ".join((o.inner_text() or "").split()) for o in _listed(page, loc)]
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(150)
+        return [o for o in opts if o and not re.fullmatch(r"(no options|loading\.*|select\.*)", o, re.I)][:200]
+    except Exception:
+        return []
+
+
+def _norm(s: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9+ ]", " ", (s or "").lower()).split())
+
+
+def _best_option(texts: list[str], wanted: str) -> int | None:
+    w = _norm(wanted)
+    if not w:
+        return None
+    normed = [_norm(t) for t in texts]
+    for test in (lambda t: t == w, lambda t: t.startswith(w + " ") or t.startswith(w),
+                 lambda t: w in t, lambda t: t and t in w):
+        for i, t in enumerate(normed):
+            if test(t):
+                return i
+    return None
+
+
+def _fill_combobox(page, loc, value) -> bool:
+    text = "Yes" if value is True else "No" if value is False else str(value)
+    loc.click(timeout=3000)
+    page.wait_for_timeout(300)
+    opts = _listed(page, loc)
+    i = _best_option([o.inner_text() for o in opts], text)
+    # Long or search-as-you-type lists: type, then pick from what's shown. "Nairobi, Kenya" is retried as "Nairobi".
+    tries = [text[:40]] + ([text.split(",")[0].strip()] if "," in text else [])
+    for typed in tries:
+        if i is not None:
+            break
+        loc.fill(typed)
+        page.wait_for_timeout(1500)
+        opts = _listed(page, loc)
+        texts = [o.inner_text() for o in opts]
+        i = _best_option(texts, text)
+        if i is None and typed != text[:40]:
+            i = _best_option(texts, typed)
+        if i is None and len(opts) == 1 and len(text) <= 40:
+            i = 0  # the only match for what was typed (e.g. a city search)
+    if i is None:
+        page.keyboard.press("Escape")
+        return False
+    opts[i].click(timeout=3000)
+    page.wait_for_timeout(300)
+    return True
 
 
 def to_question(f: dict) -> Question:
     kind = {"checkboxes": "checkbox"}.get(f["kind"], f["kind"])
     if kind == "combobox":
-        kind = "text"
+        kind = "select" if f.get("options") else "text"
     return Question(label=f["label"], kind=kind, options=f.get("options", []), required=f["required"])
 
 
@@ -100,24 +181,28 @@ def fill_field(page, f: dict, value) -> bool:
             ok = False
             for i, opt in enumerate(f["options"]):
                 if any(str(w).strip().lower() == opt.strip().lower() for w in wanted):
-                    page.locator(f'[data-jsa="{fid}:{i}"]').check(force=True)
+                    el = page.locator(f'[data-jsa="{fid}:{i}"]')
+                    try:
+                        el.check(force=True, timeout=3000)
+                    except Exception:
+                        el.evaluate("e => { if (!e.checked) e.click(); }")
                     ok = True
             return ok
         loc = page.locator(f'[data-jsa="{fid}"]')
         if kind == "file":
             loc.set_input_files(str(value))
         elif kind == "checkbox":
-            if value is True:
-                loc.check(force=True)
-            else:
+            if value is not True:
                 return False
+            try:
+                loc.check(force=True, timeout=3000)
+            except Exception:  # a hidden input behind a toggle: click it the way the page's own label would
+                loc.evaluate("e => { if (!e.checked) e.click(); }")
+            return bool(loc.evaluate("e => e.checked"))
         elif kind == "select":
             loc.select_option(label=str(value))
         elif kind == "combobox":
-            loc.click()
-            loc.fill(str(value))
-            page.wait_for_timeout(600)
-            page.keyboard.press("Enter")
+            return _fill_combobox(page, loc, value)
         else:
             loc.fill(str(value))
         return True
@@ -142,10 +227,19 @@ VERIFY_JS = r"""
   const skip = new Set(consentLabels || []);
   const root = pickRoot(rootSel);
   const seenGroups = new Set();
+  // Ashby and others add a second "autofill from resume" upload; once the CV is in one, the other isn't missing.
+  const cvAttached = [...root.querySelectorAll('input[type=file]')].some(x => x.files && x.files.length &&
+      /\.(docx|pdf|doc)$/i.test(x.files[0].name));
+  const chosen = el => { if (clean(el.value)) return true; let p = el.parentElement;
+    for (let i = 0; i < 5 && p; i++, p = p.parentElement) {
+      const v = p.querySelector('[class*="singleValue" i], [class*="single-value" i], [class*="multiValue" i], [class*="multi-value" i], [class*="selected-value" i]');
+      if (v && clean(v.innerText)) return true; }
+    return false; };
   for (const el of root.querySelectorAll('input, textarea, select')) {
     const t = (el.type || el.tagName).toLowerCase();
     if (['hidden', 'submit', 'button', 'reset', 'image', 'search'].includes(t) || el.disabled) continue;
-    if (t !== 'file' && !vis(el)) continue;
+    if (t !== 'file' && (el.getAttribute('aria-hidden') === 'true' || /requiredInput/i.test(el.className || ''))) continue;
+    if (t !== 'file' && !vis(el) && !((t === 'checkbox' || t === 'radio') && el.getAttribute('data-jsa'))) continue;
     const req = el.required || el.getAttribute('aria-required') === 'true';
     const tag = el.getAttribute('data-jsa') || el.name || el.id || t;
     if (skip.has(tag.split(':')[0])) continue;
@@ -153,7 +247,7 @@ VERIFY_JS = r"""
       const isCv = /resume|\bcv\b|curriculum/i.test(el.name + ' ' + el.id + ' ' + (el.getAttribute('aria-label') || ''))
                    || (el.closest('div,fieldset,label') && /resume|\bcv\b|curriculum/i.test(el.closest('div,fieldset,label').innerText || ''));
       const f = el.files && el.files[0];
-      if ((req || isCv) && !f) problems.push('no file attached: ' + tag);
+      if ((req || (isCv && !cvAttached)) && !f) problems.push('no file attached: ' + tag);
       if (f && isCv && !/\.(docx|pdf|doc)$/i.test(f.name)) problems.push('CV is not a .docx/.pdf: ' + f.name);
       continue;
     }
@@ -166,7 +260,7 @@ VERIFY_JS = r"""
       if (![...group].some(x => x.checked)) problems.push('unanswered: ' + tag);
       continue;
     }
-    if (!clean(el.value)) problems.push('empty: ' + tag);
+    if (el.getAttribute('role') === 'combobox' ? !chosen(el) : !clean(el.value)) problems.push('empty: ' + tag);
   }
   const errSel = '[aria-invalid="true"], .error, .errors, .field-error, .invalid-feedback, .error-message, .form-error, [role="alert"], [class*="error" i]';
   for (const el of document.querySelectorAll(errSel)) {

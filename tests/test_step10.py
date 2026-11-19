@@ -134,3 +134,40 @@ def test_portal_sign_up_does_not_lock_the_database(tmp_path, monkeypatch):
     monkeypatch.setattr(form_stager, "application_url", lambda job: url)
     res = form_stager.run(ws, limit=1)
     assert "FAILED" not in res, res
+
+
+def test_react_select_dropdowns_hidden_toggle_and_ashby_resume(tmp_path, monkeypatch):
+    import json
+    import pytest
+    from tests.test_step4 import FIX, _browser_ok
+    if not _browser_ok():
+        pytest.skip("no browser")
+    from src.automation import form_fields
+    from src.automation.browser_manager import browser
+    from src.intelligence.answer_engine import AnswerEngine
+    from src.workspace import ensure_workspace
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    cv = tmp_path / "cv.docx"
+    cv.write_bytes(b"x")
+    engine = AnswerEngine(json.load(open("config/master_profile.json")), use_llm=False)
+    job = {"title": "AI Trainer", "company": "Acme", "location": "Remote", "description": "Remote role"}
+    with browser(ws) as ctx:
+        page = ctx.new_page()
+        page.goto((FIX / "combo_form.html").as_uri())
+        fields = form_fields.discover(page)
+        by = {f["label"]: f for f in fields}
+        assert by["Race"]["options"][1] == "Black or African American"
+        assert not any("requiredInput" in f["label"] for f in fields) and len([f for f in fields if f["kind"] == "combobox"]) == 3
+        for f in fields:
+            a = engine.answer(form_fields.to_question(f), job, str(cv))
+            if f["label"] == "Location (City)":
+                a.value = "Nairobi, Kenya"
+            if f["label"].startswith("I am over 18"):
+                a.value = True
+            form_fields.fill_field(page, f, a.value)
+        vals = page.eval_on_selector_all(".select__single-value", "els => els.map(e => e.textContent)")
+        assert "No" in vals and "Black or African American" in vals and "Nairobi, Nairobi County, Kenya" in vals
+        assert page.locator("#adult").is_checked()
+        assert page.locator("#_systemfield_resume").evaluate("e => e.files.length") == 1
+        assert form_fields.verify(page) == []

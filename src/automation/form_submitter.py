@@ -74,7 +74,7 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
             ok = form_fields.fill_field(page, f, value)
             if f["required"] and not ok:
                 missing.append(f["label"])
-        consent_ids = tuple(f["id"] for f in form_fields.discover(page)
+        consent_ids = tuple(f["id"] for f in form_fields.discover(page, read_options=False)
                             if saved.get(_key(f["label"], f["kind"]), {}).get("consent")
                             and " ".join(f["label"].lower().split()) not in consents)
         missing += [p for p in form_fields.verify(page, consent_ids) if p not in missing]
