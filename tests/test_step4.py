@@ -331,7 +331,7 @@ def test_recruiter_replies_auto_send_only_complete_drafts(tmp_path, monkeypatch)
     monkeypatch.setattr(recruiter_replies.llm_client, "available", lambda: False)
     monkeypatch.setenv("EMAIL_ADDRESS", "me@example.com")
     monkeypatch.setenv("EMAIL_APP_PASSWORD", "pw")
-    base = {"from_name": "Jane", "text": "x", "received_at": "2026-11-19T08:00:00+00:00"}
+    base = {"from_name": "Jane", "text": "Hi Dickens, about your application", "received_at": "2026-11-19T08:00:00+00:00"}
     msgs = [{**base, "message_id": "<a>", "from_addr": "a@acme.com", "subject": "Data role", "category": "other"},
             {**base, "message_id": "<b>", "from_addr": "b@acme.com", "subject": "Interview", "category": "interview_request"},
             {**base, "message_id": "<c>", "from_addr": "c@acme.com", "subject": "Update", "category": "rejection"},
@@ -464,7 +464,7 @@ def test_only_one_auto_reply_per_sender_per_day(tmp_path, monkeypatch):
     monkeypatch.setattr(recruiter_replies.llm_client, "available", lambda: False)
     monkeypatch.setenv("EMAIL_ADDRESS", "me@example.com")
     monkeypatch.setenv("EMAIL_APP_PASSWORD", "pw")
-    base = {"from_name": "Jane", "text": "x", "received_at": "2026-11-19T08:00:00+00:00", "from_addr": "jane@acme.com", "category": "other"}
+    base = {"from_name": "Jane", "text": "Hi Dickens, about your application", "received_at": "2026-11-19T08:00:00+00:00", "from_addr": "jane@acme.com", "category": "other"}
     sent = []
 
     class FakeSMTP:

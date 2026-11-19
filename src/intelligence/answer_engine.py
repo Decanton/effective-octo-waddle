@@ -70,6 +70,11 @@ CONSENT = re.compile(r"\b(i agree|i consent|consent|privacy (policy|notice)|term
 OPEN_TEXT = re.compile(r"\b(why|tell us|describe|explain|what interests|motivat|cover letter|additional information|anything else|about yourself|summary|how would you|what makes you)", re.I)
 
 
+def _yes_no_options(options: list[str]) -> bool:
+    norm = {_norm(o).split(" ")[0].strip(",.") for o in options or []}
+    return bool(options) and len(options) <= 4 and bool(norm & set(YES)) and bool(norm & set(NO))
+
+
 class AnswerEngine:
     def __init__(self, profile: dict, use_llm: bool = True):
         self.p = profile
@@ -160,9 +165,32 @@ class AnswerEngine:
                 if val is None or val == "":
                     return Answer(needs_user=q.required, note=f"fill '{q.label}' in screening_answers")
                 return self._fit(q, val, source)
+        yn = self.yes_no_default(label)
+        if yn is not None and (q.kind in ("radio", "checkbox") or _yes_no_options(q.options)):
+            return self._fit(q, yn, "standard")
         if q.kind in ("textarea", "text") and (OPEN_TEXT.search(label) or q.kind == "textarea"):
             return self._draft(q, job)
         return Answer(needs_user=q.required, note="no verified answer in your profile")
+
+    # Standard yes/no questions with one honest answer for Kelly (2026-11-19: "fill every field").
+    YES_NO = [
+        (r"\b(18|eighteen)\b.{0,20}(years|older|age)|\bof (legal|working) age\b|\bover (the age of )?18\b", True),
+        (r"\b(non-?compete|non-?solicit|post-?employment restrictions?|restrictive covenants?)\b", False),
+        (r"\b(previously|ever|have you)\b.{0,30}\b(work(ed)?|employed|been employed)\b.{0,20}\b(at|by|for)\b", False),
+        (r"\b(relatives?|family members?|related to)\b.{0,40}\b(employ|work)", False),
+        (r"\b(convicted|felony|criminal (record|offen[cs]e))\b", False),
+        (r"\b(require|need)\b.{0,20}\baccommodation", False),
+        (r"\bbackground (check|screening)\b|\breference checks?\b|\bdrug (test|screen)", True),
+        (r"\b(willing|able|comfortable|happy|open|available|agree) to\b|\bcan you\b|\bare you (able|willing|comfortable)\b", True),
+        (r"\bwithout (the use of |using )?(ai|chatgpt|llm)", True),
+        (r"\b(fluent|proficient)\b.{0,15}\benglish\b|\benglish\b.{0,25}\b(fluent|proficien|native|professional)", True),
+    ]
+
+    def yes_no_default(self, label: str) -> bool | None:
+        for rx, val in self.YES_NO:
+            if re.search(rx, label, re.I):
+                return val
+        return None
 
     def _demographic(self, q: Question, label: str) -> Answer | None:
         """Voluntary EEO questions answered from master_profile 'demographics' (Kelly, 2026-11-19)."""

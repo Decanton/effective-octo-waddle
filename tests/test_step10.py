@@ -169,6 +169,8 @@ def test_react_select_dropdowns_hidden_toggle_and_ashby_resume(tmp_path, monkeyp
         vals = page.eval_on_selector_all(".select__single-value", "els => els.map(e => e.textContent)")
         assert "No" in vals and "Black or African American" in vals and "Nairobi, Nairobi County, Kenya" in vals
         assert page.locator("#adult").is_checked()
+        assert page.locator("._active").all_inner_texts() == ["Yes", "No"]  # over 18: Yes; worked at Acme before: No
+        assert by["Are you over 18?"]["kind"] == "buttons"
         assert page.locator("#_systemfield_resume").evaluate("e => e.files.length") == 1
         assert form_fields.verify(page) == []
 
@@ -183,3 +185,19 @@ def test_per_employer_limits_and_review_mode(tmp_path):
     assert a.review_mode({"review_from": ""}) is False
     from src.settings import load_settings
     assert "review_from" in load_settings()
+
+
+def test_newsletters_never_get_recruiter_replies(tmp_path):
+    from src.email_agent.imap_scanner import is_recruiter
+    from src.email_agent.recruiter_replies import machine_sender
+    m = {"from_addr": "fantasy@email.premierleague.com", "subject": "Don't miss the deadline", "text": "new opportunity", "bulk": False}
+    assert not is_recruiter(m) and machine_sender(m["from_addr"], m["subject"])
+    assert not is_recruiter({"from_addr": "jane@acme.com", "subject": "Interview", "text": "interview", "bulk": True})
+    assert is_recruiter({"from_addr": "jane@acme.com", "subject": "Interview", "text": "interview", "bulk": False})
+
+
+def test_accommodation_inbox_refused_at_send_time(tmp_path):
+    from src.automation.email_apply import blocked_recipient
+    assert blocked_recipient("reasonableaccommodations@airbnb.com")
+    assert blocked_recipient("jobs@brightermonday.co.ke")
+    assert blocked_recipient("hr@acme.co.ke") is None

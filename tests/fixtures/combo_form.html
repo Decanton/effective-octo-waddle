@@ -18,6 +18,12 @@
   <div><span>Autofill from resume</span><input type="file" style="display:none"></div>
   <label for="_systemfield_resume">Resume *</label><input type="file" id="_systemfield_resume" style="display:none" required>
   <div><input type="checkbox" id="adult" required style="position:absolute;opacity:0;width:0;height:0"><label for="adult">I am over 18 *</label></div>
+  <div class="_fieldEntry"><label class="_heading">Are you over 18? *</label>
+    <div class="_yesno"><button type="button" class="_option">Yes</button><button type="button" class="_option">No</button></div>
+    <input type="checkbox" name="over18" style="display:none"></div>
+  <div class="_fieldEntry"><label class="_heading">Have you ever worked at Acme before? *</label>
+    <div class="_yesno"><button type="button" class="_option">Yes</button><button type="button" class="_option">No</button></div>
+    <input type="checkbox" name="worked" style="display:none"></div>
   <button type="submit">Submit application</button>
 </form>
 <script>
@@ -36,4 +42,7 @@ for (const id of Object.keys(lists)) {
   inp.addEventListener('click', render); inp.addEventListener('input', render);
   inp.addEventListener('keydown', e => { if (e.key === 'Escape') lb.style.display = 'none'; });
 }
+for (const g of document.querySelectorAll('._yesno')) for (const b of g.querySelectorAll('button'))
+  b.onclick = () => { g.querySelectorAll('button').forEach(x => x.classList.remove('_active')); b.classList.add('_active');
+                      g.parentElement.querySelector('input').checked = b.textContent === 'Yes'; };
 </script></body></html>

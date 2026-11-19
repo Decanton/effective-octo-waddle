@@ -46,6 +46,18 @@ SUBJECT_RE = re.compile(r"(?:subject(?: line)?|title of (?:the|your) (?:e-?mail|
                         r"[\"'“‘]?([^\"'”’\n]{4,120}?)[\"'”’]?(?:\.\s|\n|$|,)", re.I)
 
 
+def blocked_recipient(addr: str) -> str | None:
+    """Why this address must never get an application, or None. Checked again right before every send,
+    so a draft saved by an older version can't go to an accommodation, privacy or no-reply inbox."""
+    addr = (addr or "").strip().lower()
+    local, _, domain = addr.partition("@")
+    if BAD_ANYWHERE.search(addr) or BAD_LOCAL.search(local):
+        return f"{addr} is an accommodation, privacy, support or no-reply inbox, not a hiring inbox"
+    if any(domain == d or domain.endswith("." + d) for d in BAD_DOMAIN):
+        return f"{addr} belongs to a job site, not the employer"
+    return None
+
+
 def find_apply_email(text: str) -> dict | None:
     """The address the job asks applications to be sent to, or None.
 
@@ -168,6 +180,12 @@ def send(ws, staged_id: int, overrides: dict | None = None, smtp_factory=None) -
     to, subject, letter = vals.get("to"), vals.get("subject"), vals.get("cover letter") or ""
     if not (to and EMAIL_RE.fullmatch(to)):
         return {"ok": False, "error": f"bad address: {to}"}
+    why = blocked_recipient(to)
+    if why:
+        with db.session(ws.db_path) as conn:
+            conn.execute("UPDATE staged_forms SET state = 'MANUAL_APPLY', error = ? WHERE id = ?", (why + ". Not sent.", staged_id))
+            db.set_job_status(conn, row["job_id"], "MANUAL_APPLY", why)
+        return {"ok": False, "error": why + ". Nothing was sent."}
     if re.search(r"\[[^\]]*\]", letter):
         return {"ok": False, "error": "the cover letter still has a placeholder in [brackets]"}
     with db.session(ws.db_path) as conn:

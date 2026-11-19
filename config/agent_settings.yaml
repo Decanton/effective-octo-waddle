@@ -5,6 +5,14 @@
 # Leave empty to keep sending automatically.
 review_from: "2026-11-20T09:00:00+03:00"
 
+schedule:
+  # While the review page is open (START_SPRINT.bat --review), it starts the full run by itself
+  # every this many minutes: inbox, new jobs, fill, send. It keeps going overnight with nobody
+  # at the PC. Each run opens its own window and closes when done. false: runs only when you start them.
+  enabled: true
+  every_minutes: 90
+  first_after_minutes: 5
+
 auto_submit:
   # true: after filling forms, the agent sends every application that is
   # complete, without waiting for you. false: they wait on the review page.

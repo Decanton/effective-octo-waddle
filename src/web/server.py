@@ -204,6 +204,29 @@ def create_app(ws) -> FastAPI:
         _task["what"] = what
         return {"ok": True}
 
+    def _scheduler():
+        """Runs the full sprint by itself every schedule.every_minutes while the review page is open, so the
+        agent keeps applying overnight with nobody at the PC. A run lock stops two runs overlapping."""
+        import logging
+        import time as _t
+        from ..settings import load_settings
+        log = logging.getLogger("jobsprint")
+        _t.sleep(float((load_settings().get("schedule") or {}).get("first_after_minutes", 5)) * 60)
+        while True:
+            cfg = load_settings().get("schedule") or {}
+            if cfg.get("enabled") and not _task_status()["running"] and not (ws.data / "sprint.lock").exists():
+                try:
+                    run_task("sprint")
+                    log.info("Scheduled run started.")
+                except Exception as exc:
+                    log.warning("Scheduled run didn't start: %s", exc)
+            _t.sleep(max(15.0, float(cfg.get("every_minutes", 90))) * 60)
+
+    import os as _os
+    if _os.environ.get("JOBSPRINT_BACKEND_TOKEN") and _os.environ.get("JOBSPRINT_NO_SCHEDULE") != "1":
+        import threading as _th
+        _th.Thread(target=_scheduler, daemon=True).start()
+
     @app.post("/api/submit_all")
     def submit_all():
         """'Send all ready': you approve every complete form at once."""

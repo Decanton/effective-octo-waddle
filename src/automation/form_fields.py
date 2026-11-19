@@ -51,7 +51,30 @@ DISCOVER_JS = r"""
     if (!l) return false; const r = l.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
   const out = []; const groups = {}; let n = 0;
   const root = pickRoot(rootSel);
+  // Yes/No questions drawn as two buttons (Ashby and others), often over a hidden checkbox.
+  const btnFields = new Set();
+  for (const b of root.querySelectorAll('button')) {
+    if (!/^\s*yes\s*$/i.test(b.innerText || '')) continue;
+    const grp = b.parentElement; if (!grp || grp.dataset.jsaGroup) continue;
+    const btns = [...grp.querySelectorAll(':scope > button, :scope > * > button')].filter(x => (x.innerText || '').trim().length <= 40);
+    if (btns.length < 2 || btns.length > 4 || !btns.some(x => /^\s*no\s*$/i.test(x.innerText || ''))) continue;
+    let field = grp.parentElement, lab = null;
+    for (let i = 0; i < 5 && field; i++, field = field.parentElement) {
+      lab = field.querySelector(':scope > label, :scope > legend, :scope > div > label, :scope > [class*="label" i]');
+      if (lab && !lab.contains(grp) && clean(lab.innerText)) break;
+      lab = null;
+    }
+    if (!lab) continue;
+    const id = 'b' + (n++); grp.dataset.jsaGroup = id;
+    btns.forEach((x, i) => x.setAttribute('data-jsa', id + ':' + i));
+    const hidden = field.querySelector('input[type=checkbox], input[type=hidden]');
+    const req = /\*\s*$/.test(clean(lab.innerText)) || !!field.querySelector('[required], [aria-required="true"]');
+    if (field) btnFields.add(field);
+    out.push({ id, kind: 'buttons', label: clean(lab.innerText), options: btns.map(x => clean(x.innerText)), required: req, name: hidden ? hidden.name || '' : '' });
+  }
+  const inBtnField = el => [...btnFields].some(f => f.contains(el));
   for (const el of root.querySelectorAll('input, textarea, select')) {
+    if ((el.type === 'checkbox' || el.type === 'hidden') && inBtnField(el)) { el.setAttribute('data-jsa-skip', '1'); continue; }
     const t = (el.type || el.tagName).toLowerCase();
     if (['hidden', 'submit', 'button', 'reset', 'image', 'search'].includes(t) || el.disabled) continue;
     if (t !== 'file' && (el.getAttribute('aria-hidden') === 'true' || /requiredInput/i.test(el.className || ''))) continue;
@@ -164,7 +187,7 @@ def _fill_combobox(page, loc, value) -> bool:
 
 
 def to_question(f: dict) -> Question:
-    kind = {"checkboxes": "checkbox"}.get(f["kind"], f["kind"])
+    kind = {"checkboxes": "checkbox", "buttons": "radio"}.get(f["kind"], f["kind"])
     if kind == "combobox":
         kind = "select" if f.get("options") else "text"
     return Question(label=f["label"], kind=kind, options=f.get("options", []), required=f["required"])
@@ -176,6 +199,15 @@ def fill_field(page, f: dict, value) -> bool:
         return False
     fid, kind = f["id"], f["kind"]
     try:
+        if kind == "buttons":  # Yes/No drawn as buttons: click the one wanted, as a person would
+            text = "Yes" if value is True else "No" if value is False else str(value)
+            for i, opt in enumerate(f["options"]):
+                if opt.strip().lower() == text.strip().lower():
+                    b = page.locator(f'[data-jsa="{fid}:{i}"]')
+                    b.click(timeout=3000)
+                    b.evaluate("e => e.parentElement.setAttribute('data-jsa-chosen', e.innerText.trim())")
+                    return True
+            return False
         if kind in ("radio", "checkboxes"):
             wanted = value if isinstance(value, list) else [value]
             ok = False
@@ -226,6 +258,17 @@ VERIFY_JS = r"""
   const problems = [];
   const skip = new Set(consentLabels || []);
   const root = pickRoot(rootSel);
+  for (const g of root.querySelectorAll('[data-jsa-group]')) {  // Yes/No button questions
+    if (skip.has(g.dataset.jsaGroup)) continue;
+    let field = g.parentElement, req = false, lab = '';
+    for (let i = 0; i < 5 && field; i++, field = field.parentElement) {
+      const l = field.querySelector(':scope > label, :scope > legend, :scope > div > label, :scope > [class*="label" i]');
+      if (l && !l.contains(g)) { lab = clean(l.innerText); req = /\*\s*$/.test(lab) || !!field.querySelector('[required], [aria-required="true"]'); break; }
+    }
+    const picked = g.getAttribute('data-jsa-chosen') || [...g.querySelectorAll('button')].some(b =>
+      b.getAttribute('aria-pressed') === 'true' || b.getAttribute('aria-checked') === 'true' || /(^|[\s_-])(active|selected|checked|is-selected)/i.test(b.className || ''));
+    if (req && !picked) problems.push('unanswered: ' + (lab || g.dataset.jsaGroup).slice(0, 80));
+  }
   const seenGroups = new Set();
   // Ashby and others add a second "autofill from resume" upload; once the CV is in one, the other isn't missing.
   const cvAttached = [...root.querySelectorAll('input[type=file]')].some(x => x.files && x.files.length &&
@@ -241,6 +284,7 @@ VERIFY_JS = r"""
     if (t !== 'file' && (el.getAttribute('aria-hidden') === 'true' || /requiredInput/i.test(el.className || ''))) continue;
     if (t !== 'file' && !vis(el) && !((t === 'checkbox' || t === 'radio') && el.getAttribute('data-jsa'))) continue;
     const req = el.required || el.getAttribute('aria-required') === 'true';
+    if (el.hasAttribute('data-jsa-skip')) continue;
     const tag = el.getAttribute('data-jsa') || el.name || el.id || t;
     if (skip.has(tag.split(':')[0])) continue;
     if (t === 'file') {

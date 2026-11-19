@@ -117,7 +117,10 @@ def parse_message(raw: bytes, now: datetime | None = None) -> dict:
             "from_addr": addr.lower(), "from_name": name, "subject": _dec(msg.get("Subject")),
             "received_at": received.isoformat(timespec="seconds"),
             "age_hours": max(0.0, (now - received).total_seconds() / 3600),
-            "text": text or html_to_text(html), "html": html}
+            "text": text or html_to_text(html), "html": html,
+            # Newsletters and marketing mail carry these; a recruiter writing to you doesn't.
+            "bulk": bool(msg.get("List-Unsubscribe") or msg.get("List-Id")
+                         or (msg.get("Precedence") or "").lower() in ("bulk", "list", "junk"))}
 
 
 def is_job_alert(m: dict) -> bool:
@@ -125,9 +128,15 @@ def is_job_alert(m: dict) -> bool:
     return any(s in domain for s in ALERT_SENDERS) and (bool(ALERT_SUBJECT.search(m["subject"])) or len(alert_jobs(m)) >= 2)
 
 
+MAILER_DOMAIN = re.compile(r"^(e|em|email|emails|mail|mailer|mailing|news|newsletter|marketing|info|updates|notify|"
+                           r"notifications|comms|communications|promo|offers|hello|go|click|links?)\d*\.", re.I)
+
+
 def is_recruiter(m: dict, own_address: str = "") -> bool:
     if m["from_addr"] == own_address.lower() or AUTOMATED.search(m["from_addr"]):
         return False
+    if m.get("bulk") or MAILER_DOMAIN.search(m["from_addr"].split("@")[-1]):
+        return False  # a newsletter or marketing mailer (e.g. fantasy@email.premierleague.com)
     if any(s in m["from_addr"].split("@")[-1] for s in ALERT_SENDERS):
         return False  # job boards themselves are never recruiters
     if PLATFORM_SUBJECT.search(m["subject"]):

@@ -17,7 +17,9 @@ from .. import database as db
 from . import form_fields
 
 log = logging.getLogger("jobsprint")
-CONFIRM = re.compile(r"thank you|thanks for applying|application (has been )?(received|submitted)|we.?ve received|successfully submitted", re.I)
+REJECTED = re.compile(r"needs corrections|please (correct|fix) (the|these|all)|this field is required|fix the errors?|"
+                      r"there (was|were) (an )?errors? (with|in) your (application|submission)", re.I)
+CONFIRM = re.compile(r"thank you for (applying|your application|submitting)|thanks for applying|application (has been )?(received|submitted)|we.?ve received|successfully submitted", re.I)
 
 
 def _key(label: str, kind: str) -> str:
@@ -108,9 +110,23 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
         except Exception:
             body = ""
         m = CONFIRM.search(body)
+        rejected = None
+        if not confirmed:  # the form is still there and complains: it was NOT sent
+            still = form_fields.verify(page)
+            if REJECTED.search(body) or (still and form_fields.find_submit(page) is not None):
+                rejected = (REJECTED.search(body).group(0) if REJECTED.search(body) else "") or "; ".join(still[:4])
         receipt = {"url": page.url, "confirmation": body[max(0, m.start() - 80): m.end() + 160].strip() if m else None,
                    "submitted_at": db.now_iso(), "screenshot": str(shot)}
 
+    if rejected:
+        with db.session(ws.db_path) as conn:
+            conn.execute("UPDATE staged_forms SET state = 'NEEDS_USER_INPUT', receipt_json = ?, error = ? WHERE id = ?",
+                         (json.dumps(receipt), f"The site refused the form, so it was not sent: {rejected}"[:400], staged_id))
+            db.set_job_status(conn, row["job_id"], "NEEDS_USER_INPUT", f"form refused: {rejected}"[:200])
+            conn.execute("INSERT INTO screenshots(staged_form_id, path, kind, created_at) VALUES (?,?,?,?)",
+                         (staged_id, str(shot), "after_submit", db.now_iso()))
+        log.info("  not sent: the site asked for corrections (%s)", rejected[:120])
+        return {"ok": False, "screenshot": str(shot), "error": f"not sent: the site asked for corrections ({rejected[:160]})"}
     with db.session(ws.db_path) as conn:
         conn.execute("UPDATE staged_forms SET receipt_json = ? WHERE id = ?", (json.dumps(receipt), staged_id))
         db.audit(conn, "form_submitted" if confirmed else "form_submitted_unconfirmed", receipt["url"], f"{row['title']} @ {row['company']}")

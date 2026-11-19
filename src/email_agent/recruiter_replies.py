@@ -84,11 +84,36 @@ INTERVIEW_PLATFORM = re.compile(r"complete your (ai )?interview|moving forward.{
 
 def machine_sender(from_addr: str, subject: str = "") -> bool:
     """A job site's or platform's automatic mailer, not a person. Never answered."""
-    from .imap_scanner import ALERT_SENDERS, AUTOMATED, PLATFORM_SUBJECT
+    from .imap_scanner import ALERT_SENDERS, AUTOMATED, MAILER_DOMAIN, PLATFORM_SUBJECT
     addr = (from_addr or "").lower()
     local, _, domain = addr.partition("@")
     return bool(AUTOMATED.search(addr) or AUTOMATED.search(local) or any(d in domain for d in ALERT_SENDERS)
+                or MAILER_DOMAIN.search(domain)
                 or PLATFORM_SUBJECT.search(subject or "") or INTERVIEW_PLATFORM.search(subject or ""))
+
+
+def about_you(conn, row) -> bool:
+    """Automatic replies only go to mail that is clearly about you: it names you, or it comes from
+    a company you applied to. Anything else waits on the Recruiter emails tab."""
+    try:
+        from ..cv_tailor.single_template_tailor import load_profile
+        per = load_profile()["personal"]
+        names = [n for n in (per.get("first_name"), per.get("full_name"), per.get("last_name")) if n]
+    except Exception:
+        names = []
+    keys = row.keys() if hasattr(row, "keys") else []
+    text = " ".join(str(row[k] or "") for k in ("subject", "body_text") if k in keys)
+    if any(re.search(r"\b" + re.escape(n) + r"\b", text, re.I) for n in names):
+        return True
+    domain = (row["from_addr"] or "").split("@")[-1].lower()
+    base = domain.split(".")[-2] if domain.count(".") >= 1 else domain
+    if len(base) < 3:
+        return False
+    for (company,) in conn.execute("SELECT DISTINCT j.company FROM staged_forms s JOIN jobs j ON j.id = s.job_id "
+                                   "WHERE s.state IN ('SUBMITTED','SENT_UNCONFIRMED') AND j.company IS NOT NULL").fetchall():
+        if base in re.sub(r"[^a-z0-9]", "", company.lower()):
+            return True
+    return False
 
 
 def auto_send(conn, cfg: dict, smtp_factory=None) -> dict:
@@ -113,6 +138,11 @@ def auto_send(conn, cfg: dict, smtp_factory=None) -> dict:
             continue
         if row["from_addr"] == own or replied:
             out["waiting"] += 1  # already answered this person today; you decide on a second reply
+            continue
+        if not about_you(conn, row):
+            out["waiting"] += 1  # not clearly about your application: you decide
+            log.info("Not replying automatically to %s (%s): it doesn't name you or a company you applied to.",
+                     row["from_addr"], row["subject"])
             continue
         if row["category"] in skip or "[FILL IN" in body or budget <= 0:
             out["waiting"] += 1
