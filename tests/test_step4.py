@@ -389,3 +389,40 @@ def test_onboarding_and_search_pages_are_not_forms(tmp_path, monkeypatch):
         assert not form_stager._has_form(page)  # no CV upload: not an application
         page.goto("https://example.test/apply")
         assert form_stager._has_form(page)
+
+
+def test_work_authorization_notice_and_address_answers():
+    from src.cv_tailor.single_template_tailor import load_profile
+    from src.intelligence.answer_engine import AnswerEngine, Question
+    e = AnswerEngine(load_profile(), use_llm=False)
+    yn = ["Yes", "No"]
+    remote = {"location": "Remote", "is_remote": True}
+    us = {"location": "New York, NY", "is_remote": False}
+    a = lambda label, job=None, kind="radio", opts=yn: e.answer(Question(label, kind, opts, True), job)
+    assert a("Will you now or in the future require visa sponsorship to work in the United States?").value == "Yes"
+    assert a("Are you legally authorized to work in the United States?").value == "No"
+    assert a("Are you authorized to work in Kenya?").value == "Yes"
+    assert a("Are you legally authorized to work in the country where you reside?").value == "Yes"
+    assert a("Do you require sponsorship?", remote).value == "No"
+    assert a("Do you require sponsorship?", us).value == "Yes"
+    assert a("Are you eligible to work in this location?", {"location": "Nairobi, Kenya"}).value == "Yes"
+    assert a("Notice period", kind="select", opts=["Immediately", "1 week", "1 month"]).value == "1 week"
+    assert a("Notice period", kind="select", opts=["Immediately", "1 month", "3 months"]).value == "Immediately"
+    assert a("How much notice do you need?", kind="text", opts=[]).value == "1 week"
+    assert a("Earliest start date", kind="date", opts=[]).value.count("-") == 2
+    assert a("Street address", kind="text", opts=[]).value == "Waiyaki Way, Westlands"
+    assert a("City", kind="text", opts=[]).value == "Nairobi"
+    assert a("Country", kind="text", opts=[]).value == "Kenya"
+
+
+def test_salary_answers():
+    from src.cv_tailor.single_template_tailor import load_profile
+    from src.intelligence.answer_engine import AnswerEngine, Question
+    e = AnswerEngine(load_profile(), use_llm=False)
+    ke, abroad = {"location": "Nairobi, Kenya"}, {"location": "Remote", "is_remote": True}
+    assert e.answer(Question("Expected monthly salary", "text"), ke).value == "USD 800 per month"
+    assert e.answer(Question("Expected monthly salary", "text"), abroad).value == "USD 2,500 per month"
+    assert e.answer(Question("Expected annual salary (USD)", "number"), abroad).value == "30000"
+    assert e.answer(Question("Expected hourly rate", "text"), abroad).value == "USD 20 per hour"
+    assert e.answer(Question("Salary expectation in KES per month", "text"), ke).value == "KES 103,000 per month"
+    assert e.answer(Question("Salary expectations", "select", ["$0-1,000", "$1,001-2,000", "$2,001-3,000"]), abroad).value == "$2,001-3,000"

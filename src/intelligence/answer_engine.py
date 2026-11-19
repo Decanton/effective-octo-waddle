@@ -90,18 +90,24 @@ class AnswerEngine:
             (r"\b(portfolio|personal (web)?site|website|other link|url)\b", lambda: per.get("portfolio") or per.get("github"), "profile"),
             (r"\b(current|most recent) (company|employer)\b|\borganization\b|\bcompany\b", lambda: exp.get("company", "").replace("™", ""), "profile"),
             (r"\b(current|most recent) (job )?title\b", lambda: exp.get("title"), "profile"),
-            (r"\b(city|location|where are you (located|based)|current location|address)\b", lambda: per.get("location"), "profile"),
-            (r"\bcountry\b", lambda: per.get("country"), "profile"),
+            (r"\b(street|address line ?1|address 1|street address)\b", lambda: per.get("address_line"), "profile"),
+            (r"\b(state|province|county|region)\b", lambda: per.get("county"), "profile"),
+            (r"^(?!.*(authori|sponsor|visa|eligib|permit|legally|right to work|relocat|willing)).*\bcity\b", lambda: per.get("city"), "profile"),
+            (r"\b(full )?(home |mailing |residential )?address\b", lambda: per.get("full_address") or per.get("location"), "profile"),
+            (r"^(?!.*(authori|sponsor|visa|eligib|permit|legally|right to work|relocat|willing)).*\b(location|where are you (located|based)|current location|where do you (live|reside))\b", lambda: per.get("location"), "profile"),
+            (r"^(?!.*(authori|sponsor|visa|eligib|permit|legally|right to work|relocat|willing)).*\bcountry\b", lambda: per.get("country"), "profile"),
             (r"\b(highest|level of) (education|degree)\b|\bdegree\b", lambda: self.s.get("highest_education"), "screening"),
             (r"\b(field|area) of study\b|\bmajor\b|\bdiscipline\b", lambda: self.s.get("degree_field"), "screening"),
             (r"\b(school|university|college)\b", lambda: self.p["education"][0]["institution"], "profile"),
             (r"years? of (professional |relevant |work )?experience|how many years", lambda: self.s.get("years_of_experience_total"), "screening"),
-            (r"\b(salary|compensation|pay|rate)\b.*\b(hour|hourly|usd|\$)|\bhourly\b", lambda: self.s.get("expected_hourly_rate_usd"), "screening"),
-            (r"\b(salary|compensation|pay expectation|expected pay)\b", lambda: self.s.get("expected_salary_monthly_kes"), "screening"),
-            (r"\bnotice period\b", lambda: self.s.get("notice_period"), "screening"),
-            (r"\b(start date|when can you start|earliest)\b", lambda: self.s.get("earliest_start_date"), "screening"),
-            (r"\b(sponsor|sponsorship|visa)\b", lambda: self.s.get("requires_visa_sponsorship_outside_kenya"), "screening"),
-            (r"\b(authori[sz]ed|eligible|legally (able|permitted)|right to work|work permit)\b", lambda: self.s.get("authorized_to_work_in_kenya"), "screening"),
+            (r"\b(salary|compensation|pay|rate|remuneration|ctc)\b.*\b(hour|hourly)\b|\bhourly\b|\bper hour\b", lambda: "__hourly__", "screening"),
+            (r"\b(salary|compensation|pay expectations?|expected pay|remuneration|ctc|desired pay)\b", lambda: "__salary__", "screening"),
+            (r"\bnotice( period)?\b|how (much|long).{0,20}notice", lambda: self.s.get("notice_period"), "screening"),
+            (r"\b(start date|when can you start|earliest|available to start|availability to start|date available|join)\b",
+             lambda: self.s.get("earliest_start_date"), "screening"),
+            (r"\b(sponsor|sponsorship|visa)\b", lambda: "__sponsor__", "screening"),
+            (r"\b(authori[sz](ed|ation)|eligible|eligibility|legally (able|permitted|entitled)|right to work|work permit|permission to work)\b",
+             lambda: "__authorized__", "screening"),
             (r"\brelocat", lambda: self.s.get("willing_to_relocate"), "screening"),
             (r"\b(remote|work remotely)\b", lambda: self.s.get("willing_to_work_remotely"), "screening"),
             (r"\blanguages?\b", lambda: self.s.get("languages"), "screening"),
@@ -129,12 +135,93 @@ class AnswerEngine:
         for pattern, getter, source in self.rules:
             if re.search(pattern, label):
                 val = getter()
+                if val in ("__hourly__", "__salary__"):
+                    return self._salary(q, label, job, hourly=val == "__hourly__")
+                if val in ("__sponsor__", "__authorized__"):
+                    ok_here = self.works_without_visa(label, job)
+                    if ok_here is None:
+                        return Answer(needs_user=q.required, note="work-authorization question the agent couldn't place")
+                    val = (not ok_here) if val == "__sponsor__" else ok_here
+                    if not isinstance(val, bool) or self.s.get("authorized_to_work_in_kenya") is None:
+                        return Answer(needs_user=q.required, note=f"fill work authorization in screening_answers")
+                    return self._fit(q, val, source)
+                if source == "screening" and re.search(r"notice|start", label) and q.kind in ("select", "radio"):
+                    opt = self._notice_option(q.options)
+                    if opt:
+                        return Answer(opt, source)
+                if source == "screening" and re.search(r"\bdate\b", label) and re.search(r"start|available|join", label) \
+                        and q.kind in ("text", "date"):
+                    from datetime import date, timedelta
+                    days = int(self.s.get("notice_period_days") or 7)
+                    return Answer((date.today() + timedelta(days=days)).isoformat(), source)
                 if val is None or val == "":
                     return Answer(needs_user=q.required, note=f"fill '{q.label}' in screening_answers")
                 return self._fit(q, val, source)
         if q.kind in ("textarea", "text") and (OPEN_TEXT.search(label) or q.kind == "textarea"):
             return self._draft(q, job)
         return Answer(needs_user=q.required, note="no verified answer in your profile")
+
+    KENYA = re.compile(r"\b(kenya|kenyan|nairobi|mombasa|kisumu|nakuru|eldoret|east africa)\b", re.I)
+    FOREIGN = re.compile(r"\b(u\.?s\.?a?|united states|america|canada|u\.?k\.?|united kingdom|britain|england|ireland|"
+                         r"europe|european union|\beu\b|eea|germany|france|netherlands|spain|portugal|poland|italy|sweden|"
+                         r"switzerland|australia|new zealand|india|singapore|uae|dubai|saudi|qatar|south africa|nigeria|"
+                         r"ghana|egypt|israel|japan|brazil|mexico|new york|san francisco|seattle|boston|austin|chicago|los angeles|"
+                         r"london|berlin|amsterdam|paris|dublin|toronto|vancouver|sydney|bangalore|bengaluru)\b", re.I)
+    HERE = re.compile(r"countr(y|ies) (where|in which) you (live|reside|are (based|located))|your (current )?(country|location)"
+                      r"|where you (live|reside|are based)|country of residence", re.I)
+
+    def works_without_visa(self, label: str, job: dict | None) -> bool | None:
+        """True when the question is about Kenya (or remote work from Kenya), False for another country."""
+        if self.HERE.search(label) or self.KENYA.search(label):
+            return True
+        if self.FOREIGN.search(label):
+            return False
+        loc = f"{(job or {}).get('location') or ''}"
+        remote = bool((job or {}).get("is_remote")) or re.search(r"\bremote|anywhere|worldwide\b", loc, re.I)
+        if self.KENYA.search(loc):
+            return True
+        if re.search(r",\s*[A-Z]{2}\b", loc) and not self.KENYA.search(loc):
+            return False  # "New York, NY"-style US places
+        if self.FOREIGN.search(loc) and not remote:
+            return False
+        if remote and not self.FOREIGN.search(loc):
+            return True  # remote work done from Kenya
+        if self.FOREIGN.search(loc):
+            return False  # remote but tied to a foreign country, e.g. "Remote - US"
+        return None
+
+    def _salary(self, q: Question, label: str, job: dict | None, hourly: bool) -> Answer:
+        """USD 20/hour (AI training), USD 800/month in Kenya, USD 2,500/month abroad."""
+        s = self.s
+        if hourly or (job or {}).get("track") == "ai_data" and re.search(r"\bhour", label):
+            usd, unit = s.get("expected_hourly_rate_usd"), "per hour"
+        else:
+            in_kenya = self.works_without_visa(label, job) and self.KENYA.search(f"{label} {(job or {}).get('location') or ''}")
+            usd = s.get("expected_salary_monthly_usd_kenya") if in_kenya else s.get("expected_salary_monthly_usd_abroad")
+            unit = "per month"
+            if re.search(r"\b(annual|annually|per year|yearly|a year|/ ?year|p\.?a\.?)\b", label):
+                usd, unit = (usd * 12 if usd else None), "per year"
+        if not usd:
+            return Answer(needs_user=q.required, note="fill your expected pay in screening_answers")
+        kes = bool(re.search(r"\b(kes|ksh|kshs|shillings?)\b", label))
+        amount = round(usd * float(s.get("usd_to_kes") or 129), -3) if kes else usd
+        if q.kind in ("select", "radio"):
+            opt = _pick_number_range(q.options, amount)
+            return Answer(opt, "screening") if opt else Answer(needs_user=q.required, note=f"no option fits {amount}")
+        if q.kind == "number":
+            return Answer(str(int(amount)), "screening")
+        return Answer(f"{'KES' if kes else 'USD'} {int(amount):,} {unit}", "screening")
+
+    NOTICE_PREFS = [r"\b(1|one) ?week|\b7 days|\bwithin a week", r"\bimmediate|right away|asap|\bnow\b|no notice|0 ?(days|weeks)",
+                    r"less than (2|two) weeks|under (2|two) weeks|up to (2|two) weeks|(1|one) ?- ?(2|two) weeks|0 ?- ?(2|two) weeks|"
+                    r"within (2|two) weeks|(2|two) weeks or less|less than (a|1|one) month|under (a|1|one) month"]
+
+    def _notice_option(self, options: list[str]) -> str | None:
+        for pref in self.NOTICE_PREFS:
+            for o in options:
+                if re.search(pref, o, re.I):
+                    return o
+        return None
 
     def _fit(self, q: Question, val, source: str) -> Answer:
         if q.kind in ("select", "radio"):
@@ -172,7 +259,8 @@ class AnswerEngine:
 
 def _pick_number_range(options: list[str], n: float) -> str | None:
     for o in options:
-        nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", o)]
+        nums = [float(x.replace(",", "")) * (1000 if k.lower() == "k" else 1)
+                for x, k in re.findall(r"(\d[\d,]*(?:\.\d+)?)\s*([kK]?)", o)]
         if len(nums) >= 2 and nums[0] <= n <= nums[1]:
             return o
         if len(nums) == 1 and re.search(r"\+|more|over|above", o, re.I) and n >= nums[0]:
