@@ -55,7 +55,8 @@ def _account_page(page) -> bool:
     try:
         if ACCOUNT_URL.search(urlparse(page.url).path + "?"):
             return True
-        return page.locator("input[type=password]").count() > 0
+        # Only a password box you can see counts: many job boards hide a login pop-up on every page.
+        return page.locator("input[type=password]:visible").count() > 0
     except Exception:
         return True
 

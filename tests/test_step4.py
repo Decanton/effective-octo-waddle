@@ -162,3 +162,15 @@ def test_signup_page_is_tracked_as_needs_login(tmp_path, monkeypatch):
     with db.session(ws.db_path) as c:
         assert c.execute("SELECT state FROM staged_forms").fetchone()[0] == "NEEDS_LOGIN"
     assert any(u == url for _, u in browser_manager.pages_to_sign_in(ws))
+
+
+@pytest.mark.skipif(not _browser_ok(), reason="Playwright browser not installed")
+def test_hidden_login_popup_does_not_hide_a_real_form(tmp_path, monkeypatch):
+    from src.automation import form_stager
+    from src.automation.browser_manager import browser
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    with browser(ws) as ctx:
+        page = ctx.new_page()
+        page.goto((FIX / "hidden_login.html").as_uri())
+        assert not form_stager._account_page(page) and form_stager._has_form(page)
