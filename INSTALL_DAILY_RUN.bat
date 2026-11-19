@@ -9,8 +9,7 @@ set "RUNAT=%~1"
 if "%RUNAT%"=="" set /p RUNAT=What time should it run every day (24-hour, e.g. 07:30)? 
 if "%RUNAT%"=="" set "RUNAT=07:30"
 schtasks /create /tn "JobSprintAgent" /sc daily /st %RUNAT% /f /tr "\"%~dp0START_SPRINT.bat\" --no-review"
-REM Desktop shortcut to the agent's Chrome profile, so you can sign in to sites there any time.
-powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Desktop')+'\Job Agent Chrome.lnk'); $s.TargetPath='%~dp0OPEN_AGENT_CHROME.bat'; $s.WorkingDirectory='%~dp0'; $s.WindowStyle=7; $s.Save()" >nul 2>nul
+call "%~dp0MAKE_SHORTCUT.bat" >nul 2>nul
 if errorlevel 1 (
     echo Could not create the daily task.
 ) else (
