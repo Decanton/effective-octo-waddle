@@ -201,23 +201,14 @@
       "start": "03/2025",
       "end": "Completed",
       "details": []
-    },
-    {
-      "id": "denaco",
-      "qualification": "Certificate in Data Analytics",
-      "institution": "Denaco School",
-      "location": "Nairobi, Kenya",
-      "start": "01/2024",
-      "end": "06/2024",
-      "details": []
     }
   ],
 
   "education_order": {
-    "software": ["alx_se", "uon", "alx_ds", "denaco"],
-    "ai_data": ["uon", "alx_ds", "alx_se", "denaco"],
-    "mechanical": ["uon", "alx_se", "alx_ds", "denaco"],
-    "general": ["uon", "alx_se", "alx_ds", "denaco"]
+    "software": ["alx_se", "uon", "alx_ds"],
+    "ai_data": ["uon", "alx_ds", "alx_se"],
+    "mechanical": ["uon", "alx_se", "alx_ds"],
+    "general": ["uon", "alx_se", "alx_ds"]
   },
 
   "skills": {
@@ -253,7 +244,6 @@
     {"text": "Member, Mechanical Engineering Alumni Chapter, University of Nairobi", "tracks": ["mechanical"]},
     {"text": "Software Engineering (Backend Specialty), ALX Africa – Holberton", "tracks": ["software", "ai_data", "mechanical", "general"]},
     {"text": "Data Science, ALX Africa – Holberton", "tracks": ["software", "ai_data", "mechanical", "general"]},
-    {"text": "Data Analytics, ALX Fellowship", "tracks": ["software", "ai_data", "mechanical", "general"]},
     {"text": "Oracle SQL and PL/SQL Development Certification, Udemy", "tracks": ["software", "ai_data", "mechanical", "general"]},
     {"text": "Oracle Database SQL Associate, Oracle (In Preparation)", "tracks": ["software", "ai_data", "mechanical"]},
     {"text": "UX/UI Design, IBM SkillsBuild", "tracks": ["software", "ai_data", "mechanical", "general"]}
