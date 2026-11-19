@@ -37,7 +37,7 @@ more_sources:
     - {name: ngojobsinafrica, url: "https://ngojobsinafrica.com/feed/", location: Kenya}
   html_boards:
     - {name: brightermonday, list_url: "https://www.brightermonday.co.ke/jobs?sort=latest", link: "/listings/[^\"'?#]+"}
-    - {name: fuzu, list_url: "https://www.fuzu.com/kenya/job", link: "/kenya/job/[^\"'?#]+"}
+    - {name: fuzu, list_url: "https://www.fuzu.com/kenya/job", link: "/kenya/jobs/[^\"'?#]+"}
     - {name: myjobmag_web, list_url: "https://www.myjobmag.co.ke/jobs", link: "/job/[^\"'?#]+"}
     - {name: kenyajob, list_url: "https://www.kenyajob.com/job-vacancies-kenya", link: "/job-vacancies-kenya/[^\"'?#]+"}
   json_apis: [arbeitnow, workingnomads]

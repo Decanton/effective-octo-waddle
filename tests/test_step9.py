@@ -77,3 +77,31 @@ def test_cv_changes_side_by_side(tmp_path):
                   (jid, cid, "https://boards.greenhouse.io/acme/jobs/1", "READY_TO_SUBMIT", _iso()))
     x = TestClient(create_app(ws)).get("/api/cvdiff/1").json()
     assert x["track"] == "software" and x["rows"] and all({"standard", "tailored", "kind"} <= set(r) for r in x["rows"])
+
+
+def test_finds_role_on_company_ashby_board(monkeypatch):
+    from src.discovery import company_boards as cb
+    cb._cache.clear()
+    ashby = {"jobs": [{"id": "1", "title": "Full-Stack Engineer (Backend Leaning) - Creative Agents", "isListed": True,
+                       "jobUrl": "https://jobs.ashbyhq.com/ElevenLabs/35813150", "applyUrl": "https://jobs.ashbyhq.com/ElevenLabs/35813150/application",
+                       "publishedAt": "2026-11-19T10:00:00Z", "descriptionPlain": "x"},
+                      {"id": "2", "title": "Account Executive", "isListed": True, "jobUrl": "https://jobs.ashbyhq.com/ElevenLabs/2"}]}
+
+    class R:
+        def __init__(self, ok, data=None): self.ok, self._d = ok, data
+        def json(self): return self._d
+
+    def get(self, url, timeout=None):
+        return R(True, ashby) if "ashbyhq.com" in url and "/elevenlabs" in url else R(False)
+    monkeypatch.setattr("requests.Session.get", get)
+    url = cb.find({"title": "Full-Stack Engineer (Backend Leaning) - Creative Agents", "company": "ElevenLabs"})
+    assert url == "https://jobs.ashbyhq.com/ElevenLabs/35813150/application"
+    assert cb.find({"title": "Mechanical Engineer", "company": "ElevenLabs"}) is None
+    assert cb.slugs("Fluor Corporation")[0] == "fluorcorporation" and "fluor" in cb.slugs("Fluor Corporation")
+
+
+def test_accommodation_and_privacy_inboxes_never_used():
+    from src.automation.email_apply import find_apply_email
+    t = "If you need assistance applying or an accommodation, send your CV request to reasonableaccommodations@airbnb.com"
+    assert find_apply_email(t) is None
+    assert find_apply_email("Please send your CV and cover letter to careers-privacy@acme.com") is None

@@ -30,6 +30,9 @@ log = logging.getLogger("jobsprint")
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 APPLY_WORDS = re.compile(r"\b(send|e-?mail|submit|forward|apply|applications?|address(ed)?)\b", re.I)
 DOC_WORDS = re.compile(r"\b(cv|c\.v\.|resume|résumé|curriculum vitae|cover(ing)? letter|application|applications|documents)\b", re.I)
+# Anywhere in the address: these inboxes never take applications (accommodation requests, privacy, mailers).
+BAD_ANYWHERE = re.compile(r"accommodat|accessib|disabilit|privacy|gdpr|no-?reply|do-?not-?reply|unsubscribe|abuse|ethics|"
+                          r"whistle|compliance|legal|security|billing|invoice|press|media|webmaster", re.I)
 BAD_LOCAL = re.compile(r"^(no-?reply|do-?not-?reply|privacy|gdpr|dpo|legal|abuse|support|help|press|media|"
                        r"accommodations?|accessibility|disability|webmaster|unsubscribe|security|billing|sales)", re.I)
 BAD_DOMAIN = ("example.com", "example.org", "domain.com", "email.com", "sentry.io", "wixpress.com", "linkedin.com",
@@ -55,7 +58,7 @@ def find_apply_email(text: str) -> dict | None:
     for m in EMAIL_RE.finditer(text):
         addr = m.group(0).rstrip(".").lower()
         local, _, domain = addr.partition("@")
-        if BAD_LOCAL.search(local) or any(domain.endswith(d) for d in BAD_DOMAIN):
+        if BAD_LOCAL.search(local) or BAD_ANYWHERE.search(local) or any(domain.endswith(d) for d in BAD_DOMAIN):
             continue
         window = text[max(0, m.start() - 220): m.end() + 80]
         if not (APPLY_WORDS.search(window) and DOC_WORDS.search(window)):

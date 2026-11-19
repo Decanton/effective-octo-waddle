@@ -156,6 +156,7 @@ def test_cdp_is_off_for_tests_and_detects_running_chrome(monkeypatch):
     monkeypatch.setenv("JOBSPRINT_CHROMIUM_PATH", "/x")
     assert bm._use_cdp(False)[0] is False
     monkeypatch.delenv("JOBSPRINT_CHROMIUM_PATH")
+    monkeypatch.delenv("JOBSPRINT_NO_CDP", raising=False)  # the updater sets it while testing a new version
     monkeypatch.setattr(bm, "find_chrome", lambda: "chrome.exe")
     ok, port = bm._use_cdp(False)
     assert ok is True and port == 9222

@@ -38,7 +38,7 @@ DEFAULT_RSS = [
 ]
 DEFAULT_HTML = [
     {"name": "brightermonday", "list_url": "https://www.brightermonday.co.ke/jobs?sort=latest", "link": r"/listings/[^\"'?#]+"},
-    {"name": "fuzu", "list_url": "https://www.fuzu.com/kenya/job", "link": r"/kenya/job/[^\"'?#]+"},
+    {"name": "fuzu", "list_url": "https://www.fuzu.com/kenya/job", "link": r"/kenya/jobs/[^\"'?#]+"},
     {"name": "myjobmag_web", "list_url": "https://www.myjobmag.co.ke/jobs", "link": r"/job/[^\"'?#]+"},
     {"name": "kenyajob", "list_url": "https://www.kenyajob.com/job-vacancies-kenya", "link": r"/job-vacancies-kenya/[^\"'?#]+"},
 ]
@@ -124,7 +124,7 @@ def jobposting(html: str) -> dict | None:
     """The schema.org JobPosting a page publishes for Google Jobs."""
     for raw in re.findall(r"<script[^>]+application/ld\+json[^>]*>(.*?)</script>", html or "", re.S | re.I):
         try:
-            data = json.loads(raw.strip())
+            data = json.loads(raw.strip(), strict=False)  # some sites leave raw newlines in the text
         except ValueError:
             continue
         stack = data if isinstance(data, list) else [data]

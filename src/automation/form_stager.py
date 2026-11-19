@@ -64,6 +64,7 @@ def _closed(page) -> bool:
 
 
 BLOCKED_TITLE = re.compile(r"just a moment|attention required|access denied|verify you are human", re.I)
+PAYWALL = re.compile(r"paywall|payment_plan|/pricing|/upgrade|top_access", re.I)
 ACCOUNT_URL = re.compile(r"/(sign-?up|sign-?in|log-?in|register|create-account|join|auth|account|accounts|onboarding|"
                          r"welcome|get-started|getting-started|profile/(setup|create|edit)|settings|subscribe|pricing|"
                          r"checkout|upgrade|premium)(/|\?|$)|/step_?\d", re.I)
@@ -302,6 +303,9 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
         if found:
             return email_apply.stage(conn, ws, job, cv_id, cv_path, cv.track, found, profile)
     active = page
+    if not direct:  # boards often hide the employer's link: look for the same role on the company's own Greenhouse/Lever/Ashby
+        from ..discovery import company_boards
+        direct = company_boards.find(job)
     if direct:
         url = direct
     else:
@@ -313,6 +317,13 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
             found = None
         if found:
             return email_apply.stage(conn, ws, job, cv_id, cv_path, cv.track, found, profile)
+    if not url and PAYWALL.search(active.url or ""):
+        conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
+                     (jid, cv_id, job.get("apply_url") or job["url"], "MANUAL_APPLY", db.now_iso(),
+                      f"{urlparse(active.url).netloc} only shows the employer's link to paying members, and the role isn't on "
+                      "the company's own Greenhouse, Lever or Ashby board. Skipped."))
+        db.set_job_status(conn, jid, "MANUAL_APPLY", "job board paywall")
+        return "MANUAL_APPLY"
     if not url and _account_page(active) and not active.url.startswith("about:"):
         url = _sign_in_then_retry(active, job, ws)
         if not url:
