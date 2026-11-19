@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 from .. import database as db
 from ..cv_tailor.single_template_tailor import build_cv, load_profile
 from ..intelligence.answer_engine import AnswerEngine
-from . import form_fields
+from . import email_apply, form_fields
 
 log = logging.getLogger("jobsprint")
 
@@ -200,7 +200,19 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
                            profile=profile)
     cv_id = db.add_tailored_cv(conn, jid, cv.track, str(cv_path), cv.matched_keywords)
 
-    url = application_url(job) or _follow_to_ats(page, job)
+    direct = application_url(job)
+    if not direct:  # "send your CV to hr@..." in the job post
+        found = email_apply.find_apply_email(job.get("description") or "")
+        if found:
+            return email_apply.stage(conn, ws, job, cv_id, cv_path, cv.track, found, profile)
+    url = direct or _follow_to_ats(page, job)
+    if not url:
+        try:
+            found = email_apply.find_apply_email(page.inner_text("body", timeout=3000))
+        except Exception:
+            found = None
+        if found:
+            return email_apply.stage(conn, ws, job, cv_id, cv_path, cv.track, found, profile)
     if not url and _account_page(page) and not page.url.startswith("about:"):
         return _needs_login(conn, jid, cv_id, page.url)
     if not url:
@@ -259,7 +271,11 @@ def run(ws, limit: int | None = None) -> dict:
         pool = [dict(r) for r in conn.execute(
             "SELECT * FROM jobs WHERE status = 'QUALIFIED' ORDER BY priority_score DESC LIMIT ?", (limit * 4,))]
     # Jobs that point straight at a Greenhouse, Lever or Ashby form go first: those fill reliably.
-    jobs = sorted(pool, key=lambda j: application_url(j) is None)[:limit]
+    def order(j):
+        if application_url(j):
+            return 0
+        return 1 if email_apply.find_apply_email(j.get("description") or "") else 2
+    jobs = sorted(pool, key=order)[:limit]
     if not jobs:
         log.info("No qualified jobs waiting. Run --discover first.")
         return counts

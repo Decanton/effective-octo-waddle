@@ -60,6 +60,9 @@ Settings live in `config/agent_settings.yaml`. With `auto_submit.enabled: true` 
 
 Everything else waits on the review page, where **Send all ready** sends every complete form at once. A form where Submit was pressed but no thank-you page appeared is marked **sent? check** and is never sent twice.
 
+## Applying by email
+Some jobs say "send your CV and cover letter to hr@company.com". The agent finds that address in the job post, or on the page the Apply link opens. It then writes a cover letter that uses only facts from your profile, and emails it with your tailored CV (both as Word files) from `EMAIL_ADDRESS`. It never uses privacy, accessibility, support or no-reply addresses. Each job is emailed once. Set `email_applications` in `config/agent_settings.yaml` (on, with up to 10 a day) to choose whether these go out automatically or wait on the review page, where they show as **by email** with the letter editable.
+
 ## Sign-ins
 Some sites need an account before you can apply. Those jobs show **sign in once**. Run `START_SPRINT.bat --login-setup`, then sign in or sign up yourself on each tab. The browser remembers you, and the agent never sees your passwords. Then run `START_SPRINT.bat --restage --stage-only` and those forms get filled.
 

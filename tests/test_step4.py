@@ -174,3 +174,101 @@ def test_hidden_login_popup_does_not_hide_a_real_form(tmp_path, monkeypatch):
         page = ctx.new_page()
         page.goto((FIX / "hidden_login.html").as_uri())
         assert not form_stager._account_page(page) and form_stager._has_form(page)
+
+
+from src.automation import email_apply  # noqa: E402
+
+
+@pytest.mark.parametrize("text,to", [
+    ("Interested candidates should send their CV and cover letter to careers@acme.co.ke by 30th Nov.", "careers@acme.co.ke"),
+    ("How to apply: email your resume to Jobs@Acme.com with the subject 'Data Analyst - Your Name'.", "jobs@acme.com"),
+    ("Applications (CV + cover letter) should be addressed to hr@twiga.com.", "hr@twiga.com"),
+    ("If you need an accommodation during the application process, contact accommodations@acme.com.", None),
+    ("Questions about privacy? Write to privacy@acme.com. Apply via the form below with your CV.", None),
+    ("Contact noreply@acme.com to send your CV.", None),
+    ("We love Python. Reach the team at team@acme.com for anything.", None),
+])
+def test_finds_apply_by_email_address(text, to):
+    found = email_apply.find_apply_email(text)
+    assert (found or {}).get("to") == to
+
+
+def test_subject_hint():
+    f = email_apply.find_apply_email("Send your CV to jobs@acme.com. Subject line: Junior Data Engineer Application.\n")
+    assert f["subject_hint"] == "Junior Data Engineer Application"
+    p = {"personal": {"full_name": "Dickens Owuor Owino"}}
+    assert email_apply.subject_for({"title": "Data Engineer"}, None, p) == "Application: Data Engineer - Dickens Owuor Owino"
+    assert email_apply.subject_for({"title": "Data Engineer"}, "the job title and your name", p) == "Data Engineer - Dickens Owuor Owino"
+
+
+def test_email_application_staged_and_sent_once(tmp_path, monkeypatch):
+    from src.cv_tailor.single_template_tailor import build_cv, load_profile
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    monkeypatch.setattr(email_apply.llm_client, "available", lambda: False)
+    profile = load_profile()
+    job = {"url": "https://brightermonday.co.ke/listings/1", "source": "email:brightermonday.co.ke", "title": "Data Analyst",
+           "company": "Twiga", "description": "Python SQL. Send your CV and cover letter to hr@twiga.com", "status": "QUALIFIED",
+           "age_hours": 3, "priority_score": 0.8}
+    with db.session(ws.db_path) as c:
+        job["id"] = db.upsert_job(c, job)
+        cv_path, cv = build_cv(job["title"] + "\n" + job["description"], ws.tailored_cvs / "t.docx", profile=profile)
+        cv_id = db.add_tailored_cv(c, job["id"], cv.track, str(cv_path), cv.matched_keywords)
+        found = email_apply.find_apply_email(job["description"])
+        assert email_apply.stage(c, ws, job, cv_id, cv_path, cv.track, found, profile) == "READY_TO_SUBMIT"
+        sid = c.execute("SELECT id FROM staged_forms").fetchone()[0]
+    monkeypatch.setenv("EMAIL_ADDRESS", "me@example.com")
+    monkeypatch.setenv("EMAIL_APP_PASSWORD", "pw")
+    sent = []
+
+    class FakeSMTP:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def login(self, u, p): pass
+        def send_message(self, m): sent.append(m)
+    res = email_apply.send(ws, sid, smtp_factory=FakeSMTP)
+    assert res["ok"], res
+    m = sent[0]
+    assert m["To"] == "hr@twiga.com" and "Data Analyst" in m["Subject"]
+    names = [p.get_filename() for p in m.iter_attachments()]
+    assert names == ["Dickens_Owuor_Owino_CV.docx", "Dickens_Owuor_Owino_Cover_Letter.docx"]
+    body = m.get_body(("plain",)).get_content()
+    assert "Twiga" in body and "Dickens Owuor Owino" in body
+    assert not email_apply.send(ws, sid, smtp_factory=FakeSMTP)["ok"] and len(sent) == 1  # never twice
+    with db.session(ws.db_path) as c:
+        assert auto_submitter.sent_today(c, by_email=True) == 1 and auto_submitter.sent_today(c) == 0
+
+
+def test_email_letter_with_placeholder_is_not_sent(tmp_path, monkeypatch):
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    with db.session(ws.db_path) as c:
+        jid = db.upsert_job(c, {"url": "u", "source": "x", "title": "T", "status": "READY_TO_SUBMIT", "age_hours": 1})
+        cur = c.execute("INSERT INTO staged_forms(job_id, form_url, answers_json, state, created_at) VALUES (?,?,?,?,?)",
+                        (jid, "mailto:hr@x.com", json.dumps([{"label": "To", "value": "hr@x.com"}, {"label": "Subject", "value": "s"},
+                                                            {"label": "Cover letter", "value": "Dear [Name]"}]), "READY_TO_SUBMIT", db.now_iso()))
+    assert "placeholder" in email_apply.send(ws, cur.lastrowid)["error"]
+
+
+def test_auto_send_handles_email_applications_with_own_cap(tmp_path):
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    with db.session(ws.db_path) as c:
+        e1 = _staged(c, "mailto:hr@a.com", prio=0.9)
+        e2 = _staged(c, "mailto:hr@b.com", prio=0.8)
+        f1 = _staged(c, "https://boards.greenhouse.io/acme/jobs/1", prio=0.7)
+    calls = []
+
+    def fake_submit(ws_, sid, overrides, consents, confirm_wait_ms):
+        calls.append(sid)
+        with db.session(ws_.db_path) as c:
+            c.execute("UPDATE staged_forms SET state='SUBMITTED', submitted_at=? WHERE id=?", (db.now_iso(), sid))
+        return {"ok": True}
+    s = load_settings()
+    s["auto_submit"].update(enabled=False)
+    s["email_applications"].update(enabled=True, max_per_day=1)
+    auto_submitter.run(ws, s, submit_fn=fake_submit)
+    assert calls == [e1]  # forms off, email cap 1
+    s["auto_submit"].update(enabled=True, max_per_day=5)
+    auto_submitter.run(ws, s, submit_fn=fake_submit)
+    assert calls == [e1, f1] and e2 not in calls

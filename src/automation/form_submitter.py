@@ -27,6 +27,11 @@ def _key(label: str, kind: str) -> str:
 def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str] | None = None,
            confirm_wait_ms: int = 180_000) -> dict:
     from .browser_manager import browser
+    with db.session(ws.db_path) as conn:
+        r = conn.execute("SELECT form_url FROM staged_forms WHERE id = ?", (staged_id,)).fetchone()
+    if r and (r["form_url"] or "").startswith("mailto:"):
+        from .email_apply import send
+        return send(ws, staged_id, overrides)
     overrides = {" ".join(k.lower().split()): v for k, v in (overrides or {}).items() if v not in (None, "")}
     consents = {" ".join(c.lower().split()) for c in (consents or [])}
     with db.session(ws.db_path) as conn:

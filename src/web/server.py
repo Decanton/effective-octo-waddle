@@ -96,6 +96,7 @@ def create_app(ws) -> FastAPI:
         settings = load_settings()
         settings["auto_submit"] = {**settings["auto_submit"], "enabled": True, "only_hosts": [""],
                                    "max_per_day": 10_000}
+        settings["email_applications"] = {**settings["email_applications"], "enabled": True, "max_per_day": 10_000}
         _bulk["running"] = True
 
         def work():

@@ -21,16 +21,21 @@ from ..settings import load_settings
 log = logging.getLogger("jobsprint")
 
 
-def sent_today(conn) -> int:
+def sent_today(conn, by_email: bool = False) -> int:
     today = datetime.now(timezone.utc).date().isoformat()
-    return conn.execute("SELECT COUNT(*) FROM staged_forms WHERE state IN ('SUBMITTED','SENT_UNCONFIRMED') AND substr(submitted_at, 1, 10) = ?",
-                        (today,)).fetchone()[0]
+    return conn.execute("SELECT COUNT(*) FROM staged_forms WHERE state IN ('SUBMITTED','SENT_UNCONFIRMED') "
+                        "AND substr(submitted_at, 1, 10) = ? AND (form_url LIKE 'mailto:%') = ?",
+                        (today, int(by_email))).fetchone()[0]
 
 
-def eligible(row, cfg: dict) -> tuple[bool, str, list[str]]:
+def eligible(row, cfg: dict, ecfg: dict | None = None) -> tuple[bool, str, list[str]]:
     """(ok, reason, consent labels to tick) for one staged form row."""
     if row["state"] != "READY_TO_SUBMIT":
         return False, "not complete", []
+    if (row["form_url"] or "").startswith("mailto:"):
+        if not (ecfg or {}).get("enabled"):
+            return False, "email applications wait for you (email_applications.enabled is off)", []
+        return True, "", []
     host = urlparse(row["form_url"] or "").netloc.lower()
     if not any(h in host for h in cfg["only_hosts"]):
         return False, f"{host or 'unknown site'} is not on the auto-send list", []
@@ -44,28 +49,31 @@ def eligible(row, cfg: dict) -> tuple[bool, str, list[str]]:
 
 
 def run(ws, settings: dict | None = None, submit_fn=None) -> dict:
-    cfg = (settings or load_settings())["auto_submit"]
+    settings = settings or load_settings()
+    cfg, ecfg = settings["auto_submit"], settings.get("email_applications") or {}
     counts = {"sent": 0, "not_confirmed": 0, "failed": 0, "waiting_for_you": 0}
-    if not cfg["enabled"]:
+    if not cfg["enabled"] and not ecfg.get("enabled"):
         log.info("Automatic sending is off (config/agent_settings.yaml). Ready forms wait on the review page.")
         return counts
     if submit_fn is None:
         from .form_submitter import submit as submit_fn
     with db.session(ws.db_path) as conn:
-        budget = int(cfg["max_per_day"]) - sent_today(conn)
+        budget = int(cfg["max_per_day"]) - sent_today(conn) if cfg["enabled"] else 0
+        ebudget = int(ecfg.get("max_per_day", 10)) - sent_today(conn, by_email=True)
         rows = conn.execute("SELECT s.*, j.title, j.company FROM staged_forms s JOIN jobs j ON j.id = s.job_id "
                             "WHERE s.state = 'READY_TO_SUBMIT' ORDER BY j.priority_score DESC").fetchall()
-    if budget <= 0:
-        log.info("Daily limit of %s sent applications reached; the rest wait for tomorrow or for you.", cfg["max_per_day"])
-        return counts
     for row in rows:
-        ok, why, consents = eligible(row, cfg)
+        by_email = (row["form_url"] or "").startswith("mailto:")
+        ok, why, consents = eligible(row, cfg, ecfg)
+        if ok and not by_email and not cfg["enabled"]:
+            ok, why = False, "automatic form sending is off"
         if not ok:
             counts["waiting_for_you"] += 1
             log.info("Waiting for you: %s @ %s (%s)", row["title"][:60], row["company"], why)
             continue
-        if budget <= 0:
+        if (ebudget if by_email else budget) <= 0:
             counts["waiting_for_you"] += 1
+            log.info("Waiting for tomorrow (daily limit reached): %s @ %s", row["title"][:60], row["company"])
             continue
         log.info("Sending: %s @ %s", row["title"][:60], row["company"])
         try:
@@ -76,7 +84,10 @@ def run(ws, settings: dict | None = None, submit_fn=None) -> dict:
             continue
         if res.get("ok"):
             counts["sent"] += 1
-            budget -= 1
+            if by_email:
+                ebudget -= 1
+            else:
+                budget -= 1
         elif "no confirmation" in (res.get("error") or ""):
             counts["not_confirmed"] += 1
             budget -= 1  # it was probably sent; count it so the cap holds

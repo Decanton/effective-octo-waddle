@@ -17,6 +17,14 @@ auto_submit:
   # Seconds to wait for the "thank you" page after pressing Submit.
   confirm_wait_seconds: 60
 
+email_applications:
+  # Jobs that say "send your CV and cover letter to hr@...": the agent emails your
+  # tailored CV and a cover letter (facts from your profile only) from EMAIL_ADDRESS.
+  # true: sent automatically. false: they wait on the review page for Submit.
+  enabled: true
+  # Never email more than this many applications in one day.
+  max_per_day: 10
+
 email:
   # Read job alerts and recruiter messages from the inbox in .env (EMAIL_ADDRESS).
   enabled: true

@@ -65,6 +65,7 @@ const say = (t, ms = 4000) => { const m = $("#msg"); m.textContent = t; m.style.
 const CHIPS = { READY_TO_SUBMIT: '<span class="chip ok">ready</span>', NEEDS_USER_INPUT: '<span class="chip warn">needs you</span>',
   NEEDS_LOGIN: '<span class="chip warn">sign in once</span>', SENT_UNCONFIRMED: '<span class="chip warn">sent? check</span>' };
 const stateChip = s => CHIPS[s] || '<span class="chip">apply yourself</span>';
+const kindChip = it => (it.form_url || "").startsWith("mailto:") ? '<span class="chip">by email</span>' : "";
 
 async function load() {
   const [list, sum] = await Promise.all([fetch("/api/staged").then(r => r.json()), fetch("/api/summary").then(r => r.json())]);
@@ -80,7 +81,7 @@ function render() {
   $("#list").innerHTML = items.map((it, i) => `
     <div class="item ${i === cur ? "on" : ""}" data-i="${i}">
       <div class="t">${esc(it.title)}</div><div class="c">${esc(it.company || "")}</div>
-      <div class="chips">${stateChip(it.state)}<span class="chip">${Math.round(it.age_hours)}h old</span>
+      <div class="chips">${stateChip(it.state)}${kindChip(it)}<span class="chip">${Math.round(it.age_hours)}h old</span>
         <span class="chip ${it.applicant_count != null && it.applicant_count <= 25 ? "ok" : ""}">${it.applicant_count == null ? "applicants ?" : it.applicant_count + " applicants"}</span>
         <span class="chip">${esc(it.track || "")}</span></div>
     </div>`).join("") || '<p class="note" style="padding:14px">Nothing staged yet. Run the sprint first.</p>';
@@ -91,7 +92,7 @@ function render() {
     let v;
     if (a.consent) v = `<label><input type="checkbox" data-consent="${esc(a.label)}"> I agree (you must tick this yourself)</label>`;
     else if (a.kind === "file") v = esc(a.value || "") + (a.value ? "" : ' <span class="need">left empty</span>');
-    else if (a.needs_user || a.source === "ai_draft") {
+    else if (a.needs_user || a.source === "ai_draft" || (it.form_url || "").startsWith("mailto:")) {
       if (a.options && a.options.length) v = `<select data-ov="${esc(a.label)}"><option value="">Choose…</option>${a.options.map(o => `<option ${o === a.value ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
       else if (a.kind === "textarea" || a.source === "ai_draft") v = `<textarea data-ov="${esc(a.label)}">${esc(a.value || "")}</textarea>`;
       else v = `<input data-ov="${esc(a.label)}" value="${esc(a.value || "")}">`;
