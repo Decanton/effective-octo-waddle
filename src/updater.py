@@ -149,6 +149,12 @@ def check_and_update(ws, app_dir: Path = APP_DIR, cfg: dict | None = None, force
                 raise RuntimeError(f"tests failed on the new version ({summary}); kept the current one")
         install(src, app_dir, new, res["from"])
         _state["updated_at"] = time.time()
+        try:
+            from . import database as db
+            with db.session(ws.db_path) as conn:
+                db.audit(conn, "update_installed", new[:7], f"from {(res['from'] or '?')[:7]}")
+        except Exception:
+            pass
         log.info("Updated to %s", new[:7])
         return {**res, "updated": True}
     except Exception as exc:

@@ -4,6 +4,10 @@ auto_submit:
   # true: after filling forms, the agent sends every application that is
   # complete, without waiting for you. false: they wait on the review page.
   enabled: true
+  # At most this many forms a day to any one site (one company's careers site, say), so
+  # no employer gets a burst of applications. Override per site: {boards.greenhouse.io: 10}
+  per_site_default: 5
+  per_site_per_day: {}
   # Never send more than this many applications in one day.
   max_per_day: 20
   # Only send on these application systems (their forms are standard and

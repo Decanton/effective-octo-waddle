@@ -7,7 +7,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULTS = {
-    "auto_submit": {"enabled": False, "max_per_day": 20, "only_hosts": ["greenhouse.io", "lever.co", "ashbyhq.com"],
+    "auto_submit": {"per_site_default": 5, "per_site_per_day": {}, "enabled": False, "max_per_day": 20, "only_hosts": ["greenhouse.io", "lever.co", "ashbyhq.com"],
                     "accept_required_consents": False, "confirm_wait_seconds": 60},
     "email": {"enabled": True, "lookback_hours": 24},
     "email_applications": {"enabled": False, "max_per_day": 10},

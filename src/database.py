@@ -73,6 +73,14 @@ CREATE TABLE IF NOT EXISTS staged_forms (
     posting_snapshot TEXT
 );
 
+CREATE TABLE IF NOT EXISTS audit_log (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    at      TEXT NOT NULL,
+    action  TEXT NOT NULL,
+    target  TEXT,
+    detail  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS followups (
     staged_form_id INTEGER PRIMARY KEY REFERENCES staged_forms(id) ON DELETE CASCADE,
     to_addr        TEXT,
@@ -197,6 +205,11 @@ def upsert_job(conn, job: dict, run_id: int | None = None) -> int:
     qs = ", ".join("?" * (len(fields) + 4))
     cur = conn.execute(f"INSERT INTO jobs({cols}) VALUES ({qs})", (job["url"], *vals.values(), ts, ts, run_id))
     return cur.lastrowid
+
+
+def audit(conn, action: str, target: str | None = None, detail: str | None = None) -> None:
+    """Record something the agent did outside this laptop (sent, submitted, replied, signed up, updated)."""
+    conn.execute("INSERT INTO audit_log(at, action, target, detail) VALUES (?,?,?,?)", (now_iso(), action, target, (detail or "")[:500]))
 
 
 def set_job_status(conn, job_id: int, status: str, reason: str | None = None) -> None:

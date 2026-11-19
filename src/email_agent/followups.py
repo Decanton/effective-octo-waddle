@@ -61,6 +61,7 @@ def run(conn, cfg: dict, profile: dict, smtp_factory=None) -> dict:
             log.warning("Follow-up to %s not sent: %s", to, exc)
             continue
         conn.execute("INSERT OR IGNORE INTO followups(staged_form_id, to_addr, sent_at) VALUES (?,?,?)", (a["id"], to, db.now_iso()))
+        db.audit(conn, "follow_up", to, f"{a['title']} @ {a['company']}")
         out["sent"] += 1
         log.info("Followed up on %s @ %s (%s)", a["title"], a["company"], to)
     return out

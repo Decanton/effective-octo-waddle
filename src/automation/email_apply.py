@@ -206,5 +206,6 @@ def send(ws, staged_id: int, overrides: dict | None = None, smtp_factory=None) -
         conn.execute("UPDATE staged_forms SET state = 'SUBMITTED', submitted_at = ?, error = ?, receipt_json = ? WHERE id = ?",
                      (db.now_iso(), f"Emailed to {to}", json.dumps(receipt), staged_id))
         db.set_job_status(conn, row["job_id"], "SUBMITTED", f"emailed CV and cover letter to {to}")
+        db.audit(conn, "email_application", to, f"{row['title']} @ {row['company']}")
     log.info("Emailed application for %s @ %s to %s", row["title"], row["company"], to)
     return {"ok": True}

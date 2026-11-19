@@ -129,3 +129,15 @@ fail, nothing changes. Your `.env`, `.venv` and data are never touched, and the 
 `_backups`. The review page at http://127.0.0.1:8000 stays online: the new version starts next to the old
 one and takes over once it answers; anything in progress finishes on the old one. You can also press
 **Check for updates** on the review page, or run `START_SPRINT.bat --update`.
+
+## Seeing what happened
+
+- **Why this job** (on each application): which of the post's requirements your CV covers, which it doesn't, and the scores.
+- **Application record**: the job post as it was when the agent applied, the answers given, the CV sent, the receipt, replies and follow-ups.
+- **CV changes for this job**: your standard CV next to the one sent, with changed lines highlighted.
+- **Results** tab: found → good fit → filled → sent → replied → interviews → offers, response rate per source, and every application's status.
+  Email applications with no answer after 7 days get one polite follow-up in the same email thread (`follow_ups:` in the settings).
+- **Activity log** (Results tab): every email, form, reply, follow-up, site account and update the agent made.
+- Reposts of a job you already applied to are skipped; jobs not filled within 2 days of being found are dropped.
+- At most 5 forms a day go to any one site (`auto_submit.per_site_default`).
+- Keys: ↑/↓ or j/k to move, Enter to submit, Backspace to skip, / to search.

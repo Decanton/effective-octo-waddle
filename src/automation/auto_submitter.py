@@ -28,6 +28,13 @@ def sent_today(conn, by_email: bool = False) -> int:
                         (today, int(by_email))).fetchone()[0]
 
 
+def sent_today_to(conn, host: str) -> int:
+    """Forms sent to this site today (several jobs on one company's Workday count together)."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    return conn.execute("SELECT COUNT(*) FROM staged_forms WHERE state IN ('SUBMITTED','SENT_UNCONFIRMED') "
+                        "AND substr(submitted_at, 1, 10) = ? AND form_url LIKE ?", (today, f"%://{host}/%")).fetchone()[0]
+
+
 def eligible(row, cfg: dict, ecfg: dict | None = None) -> tuple[bool, str, list[str]]:
     """(ok, reason, consent labels to tick) for one staged form row."""
     if row["state"] != "READY_TO_SUBMIT":
@@ -75,6 +82,14 @@ def run(ws, settings: dict | None = None, submit_fn=None) -> dict:
             counts["waiting_for_you"] += 1
             log.info("Waiting for tomorrow (daily limit reached): %s @ %s", row["title"][:60], row["company"])
             continue
+        host = urlparse(row["form_url"] or "").netloc.lower()
+        if not by_email:
+            limit = int((cfg.get("per_site_per_day") or {}).get(host, cfg.get("per_site_default", 5)))
+            with db.session(ws.db_path) as conn:
+                if sent_today_to(conn, host) >= limit:
+                    counts["waiting_for_you"] += 1
+                    log.info("Waiting for tomorrow (%d sent to %s today): %s", limit, host, row["title"][:60])
+                    continue
         log.info("Sending: %s @ %s", row["title"][:60], row["company"])
         try:
             res = submit_fn(ws, row["id"], None, consents, confirm_wait_ms=int(cfg["confirm_wait_seconds"]) * 1000)

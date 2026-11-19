@@ -159,6 +159,7 @@ def send(conn, email_id: int, body: str, smtp_factory=None) -> dict:
             s.send_message(msg)
     except (smtplib.SMTPException, OSError) as exc:
         return {"ok": False, "error": f"could not send: {exc}"}
+    db.audit(conn, "recruiter_reply", row["from_addr"], row["subject"])
     conn.execute("UPDATE recruiter_emails SET state = 'SENT', sent_at = ?, draft_reply = ? WHERE id = ?",
                  (db.now_iso(), body, email_id))
     return {"ok": True}

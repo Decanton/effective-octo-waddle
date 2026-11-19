@@ -200,6 +200,7 @@ def sign_in_or_register(page, ws, email: str, cfg: dict, profile: dict | None = 
     password = generate_password()
     with db.session(ws.db_path) as conn:  # save first, so the password is never lost
         save_credentials(conn, ws, host, email, password)
+        db.audit(conn, "portal_account_created", host, email)
     _fill_identity(page, email, password, profile)
     if not _tick_terms(page, bool(cfg.get("accept_terms"))):
         return "needs_you"

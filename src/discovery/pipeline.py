@@ -12,6 +12,22 @@ from . import ai_platforms, ats_api_fetcher, jobspy_fetcher, more_boards, remote
 from .common import load_yaml, log
 
 
+def _key(s: str | None) -> str:
+    import re
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+
+
+def repost_of(conn, job: dict) -> bool:
+    """The same role at the same company was already applied to (or is waiting to be sent) in the last 60 days."""
+    if not job.get("company"):
+        return False
+    for r in conn.execute("SELECT j.title, j.company, j.url FROM jobs j WHERE j.status IN ('SUBMITTED','READY_TO_SUBMIT','NEEDS_USER_INPUT') "
+                          "AND j.updated_at >= strftime('%Y-%m-%dT%H:%M:%S', 'now', '-60 days') AND lower(j.company) = lower(?)", (job["company"],)):
+        if r["url"] != job.get("url") and _key(r["title"]) == _key(job["title"]):
+            return True
+    return False
+
+
 def run(ws, run_id: int | None = None, sources=("email", "jobspy", "ats", "remote", "more")) -> dict:
     profile = load_profile()
     search_cfg = load_yaml("search_queries.yaml")
@@ -47,9 +63,21 @@ def run(ws, run_id: int | None = None, sources=("email", "jobspy", "ats", "remot
         ranked = rank(enriched, profile, search_cfg, platform_cfg) + rest
 
     with db.session(ws.db_path) as conn:
+        reposts = 0
+        for j in ranked:
+            if j.get("status") == "QUALIFIED" and repost_of(conn, j):
+                j.update(status="SKIPPED", status_reason="repost of a job you already applied to")
+                reposts += 1
+        if reposts:
+            log.info("Skipped %d reposts of jobs you already applied to.", reposts)
         for j in ranked:
             if j.get("url"):
                 db.upsert_job(conn, j, run_id)
+        # Jobs that waited more than two days without being filled are past the 24-hour window: drop them.
+        stale = conn.execute("UPDATE jobs SET status = 'REJECTED_STALE', status_reason = 'not filled within 2 days of being found' "
+                             "WHERE status = 'QUALIFIED' AND first_seen_at < strftime('%Y-%m-%dT%H:%M:%S', 'now', '-2 days')").rowcount
+        if stale:
+            log.info("Dropped %d older jobs that were never filled.", stale)
         platforms = ai_platforms.sync_platforms(conn, platform_cfg)
         if recruiters:
             from ..email_agent import recruiter_replies

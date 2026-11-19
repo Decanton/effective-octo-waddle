@@ -113,6 +113,7 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
 
     with db.session(ws.db_path) as conn:
         conn.execute("UPDATE staged_forms SET receipt_json = ? WHERE id = ?", (json.dumps(receipt), staged_id))
+        db.audit(conn, "form_submitted" if confirmed else "form_submitted_unconfirmed", receipt["url"], f"{row['title']} @ {row['company']}")
         if confirmed:
             conn.execute("UPDATE staged_forms SET state = 'SUBMITTED', submitted_at = ? WHERE id = ?", (db.now_iso(), staged_id))
             db.set_job_status(conn, row["job_id"], "SUBMITTED")

@@ -115,6 +115,38 @@ def create_app(ws) -> FastAPI:
                 "receipt": json.loads(d["receipt_json"] or "null"), "submitted_at": d["submitted_at"],
                 "follow_up": dict(fu) if fu else None, "replies": replies}
 
+    @app.get("/api/cvdiff/{sid}")
+    def cv_diff(sid: int):
+        """Side by side: your standard CV for this track, and what was changed for this job."""
+        import difflib
+
+        from docx import Document
+
+        from ..cv_tailor.single_template_tailor import build_cv
+        with db.session(ws.db_path) as c:
+            r = c.execute("SELECT t.docx_path, t.track FROM staged_forms s JOIN tailored_cvs t ON t.id = s.cv_id WHERE s.id = ?",
+                          (sid,)).fetchone()
+        if not r or not r["docx_path"] or not Path(r["docx_path"]).exists():
+            raise HTTPException(404, "no tailored CV for this application")
+        base = ws.data / f"cv_standard_{r['track']}.docx"
+        if not base.exists():
+            build_cv("", base, track=r["track"])
+        text = lambda p: [x.text.strip() for x in Document(str(p)).paragraphs if x.text.strip()]  # noqa: E731
+        a, b = text(base), text(r["docx_path"])
+        rows = []
+        for op, i1, i2, j1, j2 in difflib.SequenceMatcher(a=a, b=b, autojunk=False).get_opcodes():
+            left, right = a[i1:i2], b[j1:j2]
+            for k in range(max(len(left), len(right))):
+                rows.append({"kind": "same" if op == "equal" else "changed",
+                             "standard": left[k] if k < len(left) else "", "tailored": right[k] if k < len(right) else ""})
+        return {"track": r["track"], "rows": rows, "changed": sum(1 for x in rows if x["kind"] == "changed")}
+
+    @app.get("/api/activity")
+    def activity(limit: int = 100):
+        """What the agent did outside this laptop, newest first."""
+        with db.session(ws.db_path) as c:
+            return [dict(r) for r in c.execute("SELECT at, action, target, detail FROM audit_log ORDER BY id DESC LIMIT ?", (min(limit, 500),))]
+
     @app.get("/api/results")
     def results(days: int = 30):
         from .. import analytics
