@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS recruiter_emails (
 
 # Allowed job statuses, in the order a job normally moves through them.
 JOB_STATUSES = ("NEW", "REJECTED_STALE", "REJECTED_KNOCKOUT", "QUALIFIED", "CV_READY",
-                "STAGING", "READY_TO_SUBMIT", "NEEDS_USER_INPUT", "NEEDS_LOGIN", "MANUAL_APPLY",
+                "STAGING", "READY_TO_SUBMIT", "NEEDS_USER_INPUT", "NEEDS_LOGIN", "NEEDS_MANUAL_OTP", "MANUAL_APPLY",
                 "SUBMITTED", "SKIPPED", "FAILED")
 
 

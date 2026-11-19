@@ -104,7 +104,7 @@ def test_portal_stops_at_captcha_and_without_permission(tmp_path, monkeypatch):
     db.init_db(ws.db_path)
     with browser(ws) as ctx:
         page = ctx.new_page()
-        page.set_content("<input type=email><input type=password><div class='g-recaptcha'></div><button>Sign up</button>")
+        page.set_content("<input type=email><input type=password><div class='g-recaptcha' style='width:300px;height:80px'></div><button>Sign up</button>")
         assert portal_accounts.sign_in_or_register(page, ws, "me@x.com", {"enabled": True}, profile={"personal": {}}) == "captcha"
         page.set_content("<h1>Create account</h1><input type=email><input type=password><label><input type=checkbox required> I accept the terms</label><button>Sign up</button>")
         assert portal_accounts.sign_in_or_register(page, ws, "me@x.com", {"enabled": True, "accept_terms": False},

@@ -14,6 +14,10 @@ DEFAULTS = {
     "recruiter_replies": {"auto_send": False, "max_per_day": 10, "skip_categories": ["rejection", "offer"]},
     "google_sign_in": {"enabled": False, "allow_new_accounts": False},
     "portal_accounts": {"enabled": False, "accept_terms": False, "code_wait_seconds": 60},
+    "update": {"enabled": True, "on_run": True, "check_minutes": 60, "run_tests": True, "branch": "main",
+               "repo": "https://github.com/Decanton/effective-octo-waddle.git"},
+    "human_assist": {"enabled": True, "wait_seconds": 120, "sms_wait_seconds": 10, "keep_messages_open": True,
+                     "pacing": {"between_steps_seconds": [1.5, 4.0], "between_fields_seconds": [0.2, 0.6]}},
     "browser": {"use_cdp": True, "cdp_port": 9222},
 }
 

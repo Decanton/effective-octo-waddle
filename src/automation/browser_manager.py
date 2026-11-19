@@ -23,6 +23,28 @@ LOGIN_PAGES = [
 ]
 
 
+MESSAGES_URL = "https://messages.google.com/web/conversations"
+
+
+def _keep_messages() -> bool:
+    from ..settings import load_settings
+    return bool((load_settings().get("human_assist") or {}).get("keep_messages_open", True))
+
+
+def ensure_messages_tab(ctx):
+    """Keep Google Messages for Web open in Job Agent Chrome, so SMS codes can be read. Never closed by the agent."""
+    for p in ctx.pages:
+        if "messages.google.com" in (p.url or ""):
+            return p
+    try:
+        p = ctx.new_page()
+        p.goto(MESSAGES_URL, wait_until="domcontentloaded", timeout=20000)
+        return p
+    except Exception as exc:
+        log.info("Could not open Google Messages: %s", exc)
+        return None
+
+
 def find_chrome() -> str | None:
     """Your installed Google Chrome, if any. Google sign-in works there; it is often refused in test browsers."""
     import shutil
@@ -68,6 +90,8 @@ def start_debug_chrome(ws, port: int, urls: list[str] | None = None) -> bool:
         return False
     if _cdp_up(port):
         return True
+    if _keep_messages():
+        urls = [MESSAGES_URL, *[u for u in (urls or []) if u != MESSAGES_URL]]
     subprocess.Popen([chrome, *chrome_args(ws), f"--remote-debugging-port={port}", "--remote-debugging-address=127.0.0.1",
                       "--no-first-run", "--no-default-browser-check", *(urls or [])])
     for _ in range(40):
@@ -107,6 +131,8 @@ def browser(ws, headless: bool | None = None):
             b = pw.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
             ctx = b.contexts[0] if b.contexts else b.new_context()
             ctx.set_default_timeout(15000)
+            if _keep_messages():
+                ensure_messages_tab(ctx)  # counted as yours below, so it stays open
             before = set(ctx.pages)
             ctx.new_page()  # the agent works in its own tab
             try:
@@ -129,6 +155,9 @@ def browser(ws, headless: bool | None = None):
             ignore_default_args=["--enable-automation"],
             args=["--disable-blink-features=AutomationControlled", *extra])
         ctx.set_default_timeout(15000)
+        if chrome and not headless and _keep_messages():
+            ensure_messages_tab(ctx)
+            ctx.new_page()  # the agent's own tab stays last
         try:
             yield ctx
         finally:

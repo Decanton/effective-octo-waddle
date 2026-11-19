@@ -15,6 +15,9 @@ _submit_lock = threading.Lock()  # one browser at a time
 
 
 def create_app(ws) -> FastAPI:
+    import time
+    from .. import updater
+    _started, _commit = time.time(), updater.installed()  # the code this process is running
     app = FastAPI(title="Job Sprint review", docs_url=None, redoc_url=None)
 
     def _inside_ws(p: str) -> Path:
@@ -24,6 +27,10 @@ def create_app(ws) -> FastAPI:
         if not path.exists():
             raise HTTPException(404, "file missing")
         return path
+
+    @app.get("/api/version")
+    def version():
+        return {"commit": _commit, "started_at": _started}
 
     @app.get("/", response_class=HTMLResponse)
     def index():
@@ -38,10 +45,10 @@ def create_app(ws) -> FastAPI:
                        j.priority_score, j.fit_score, j.url, j.source, t.docx_path, t.matched_keywords,
                        (SELECT path FROM screenshots WHERE staged_form_id = s.id ORDER BY id DESC LIMIT 1) AS shot
                 FROM staged_forms s JOIN jobs j ON j.id = s.job_id LEFT JOIN tailored_cvs t ON t.id = s.cv_id
-                WHERE s.state IN ('READY_TO_SUBMIT','NEEDS_USER_INPUT','MANUAL_APPLY','NEEDS_LOGIN','SENT_UNCONFIRMED')
+                WHERE s.state IN ('READY_TO_SUBMIT','NEEDS_USER_INPUT','MANUAL_APPLY','NEEDS_LOGIN','NEEDS_MANUAL_OTP','SENT_UNCONFIRMED')
                    OR (s.state = 'SUBMITTED' AND s.submitted_at >= date('now', '-14 days'))
                 ORDER BY CASE s.state WHEN 'READY_TO_SUBMIT' THEN 0 WHEN 'NEEDS_USER_INPUT' THEN 1 WHEN 'SENT_UNCONFIRMED' THEN 2
-                         WHEN 'NEEDS_LOGIN' THEN 3 WHEN 'MANUAL_APPLY' THEN 4 ELSE 5 END,
+                         WHEN 'NEEDS_MANUAL_OTP' THEN 3 WHEN 'NEEDS_LOGIN' THEN 3 WHEN 'MANUAL_APPLY' THEN 4 ELSE 5 END,
                          s.submitted_at DESC, j.priority_score DESC""").fetchall()
         out = []
         for r in rows:

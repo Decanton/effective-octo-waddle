@@ -170,8 +170,12 @@ def main(argv=None) -> int:
     ap.add_argument("--mark-applied", metavar="PLATFORM")
     ap.add_argument("--stage-only", action="store_true")
     ap.add_argument("--stage-limit", type=int)
-    ap.add_argument("--restage", action="store_true", help="retry jobs that ended as MANUAL_APPLY, FAILED or NEEDS_LOGIN")
+    ap.add_argument("--restage", action="store_true", help="retry jobs that ended as MANUAL_APPLY, FAILED, NEEDS_LOGIN or NEEDS_MANUAL_OTP")
     ap.add_argument("--review", action="store_true")
+    ap.add_argument("--review-backend", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--port", type=int, default=8000, help=argparse.SUPPRESS)
+    ap.add_argument("--update", action="store_true", help="install the newest version from GitHub now (tests run first)")
+    ap.add_argument("--no-update", action="store_true", help="don't check for a new version this run")
     ap.add_argument("--no-review", action="store_true", help="don't open the review page at the end")
     ap.add_argument("--login-setup", action="store_true")
     ap.add_argument("--email-only", action="store_true")
@@ -233,7 +237,7 @@ def main(argv=None) -> int:
         return 0
     if args.restage:
         with db.session(ws.db_path) as conn:
-            ids = [r[0] for r in conn.execute("SELECT id FROM jobs WHERE status IN ('MANUAL_APPLY','FAILED','NEEDS_LOGIN')")]
+            ids = [r[0] for r in conn.execute("SELECT id FROM jobs WHERE status IN ('MANUAL_APPLY','FAILED','NEEDS_LOGIN','NEEDS_MANUAL_OTP')")]
             for jid in ids:
                 conn.execute("DELETE FROM staged_forms WHERE job_id = ?", (jid,))
                 db.set_job_status(conn, jid, "QUALIFIED", "queued again for staging")
@@ -248,10 +252,22 @@ def main(argv=None) -> int:
         return 0
     if args.email_only:
         return email_only(ws, log)
-    if args.review:
+    if args.review_backend:
         from src.web.server import serve
+        serve(ws, open_browser=False, port=args.port)
+        return 0
+    if args.review:
+        from src.web.frontdoor import serve
         serve(ws)
         return 0
+    if args.update:
+        from src import updater
+        res = updater.check_and_update(ws, force=True)
+        print("Updated to " + res["to"][:7] if res["updated"] else (res["error"] or "Already up to date."))
+        return 0 if not res["error"] else 1
+    if not args.no_update and _self_update(ws, log):
+        import subprocess
+        return subprocess.call([sys.executable, str(Path(__file__).resolve()), *(argv if argv is not None else sys.argv[1:]), "--no-update"])
 
     # Daily sprint: check profile, find and rank jobs, stage forms, then open the review page.
     lock = ws.data / "sprint.lock"
@@ -273,9 +289,24 @@ def main(argv=None) -> int:
     finally:
         lock.unlink(missing_ok=True)
     if rc == 0 and not args.no_review:
-        from src.web.server import serve
+        from src.web.frontdoor import serve
         serve(ws)
     return rc
+
+
+def _self_update(ws, log) -> bool:
+    """Before a run: install a newer version if there is one (only when its tests pass)."""
+    import os as _os
+    if _os.environ.get("JOBSPRINT_HEADLESS") == "1":
+        return False
+    from src import updater
+    from src.settings import load_settings
+    if not (load_settings().get("update") or {}).get("on_run", True):
+        return False
+    res = updater.check_and_update(ws)
+    if res["updated"]:
+        log.info("Installed the new version %s; restarting this run on it.", res["to"][:7])
+    return res["updated"]
 
 
 def _daily(ws, log, args) -> int:
@@ -283,6 +314,10 @@ def _daily(ws, log, args) -> int:
         log.error("Fix the profile problems above, then run again.")
         return 1
     discover(ws, log)
+    with db.session(ws.db_path) as conn:  # a CAPTCHA or SMS code nobody answered last time: try again today
+        for (jid,) in conn.execute("SELECT id FROM jobs WHERE status = 'NEEDS_MANUAL_OTP'").fetchall():
+            conn.execute("DELETE FROM staged_forms WHERE job_id = ? AND state = 'NEEDS_MANUAL_OTP'", (jid,))
+            db.set_job_status(conn, jid, "QUALIFIED", "retrying after an unanswered CAPTCHA or SMS code")
     stage(ws, log, args.stage_limit)
     if not args.no_send:
         send_all(ws, log)

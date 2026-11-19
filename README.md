@@ -107,3 +107,25 @@ Copy `.env.example` to `.env` and fill it in before steps 3 and 4: a free Gemini
 - **Submit All Verified Jobs.** One button on the review page re-checks and submits every verified form,
   waits for a confirmation message or page, and saves a receipt (page, confirmation text, time, screenshot).
   Forms without a clear confirmation are marked "sent, not confirmed" and are never sent twice.
+
+## CAPTCHAs and phone codes
+
+The agent never solves a CAPTCHA. When a CAPTCHA or a code texted to your phone blocks a job:
+
+- If **Google Messages for Web** is open in Job Agent Chrome (it opens automatically; pin the tab once),
+  the agent reads the new code from your phone's texts and enters it. Only a new message that looks like a
+  verification code is used; M-PESA, bank and balance messages are ignored.
+- Otherwise the exact Chrome tab comes to the front with a desktop alert and a chime:
+  `[JobSprintAgent] Action needed on <Company>: Solve the CAPTCHA in Chrome`. Solve it (or type the code)
+  and the agent carries on with the same form. After 2 minutes with no answer the job is marked
+  `NEEDS_MANUAL_OTP` and the run moves on; the next run tries it again.
+- The agent works at a steady pace between form steps (`human_assist.pacing`), so sites aren't hammered.
+
+## Updates
+
+The agent installs new versions from GitHub by itself (`update:` in `config/agent_settings.yaml`): before
+each daily run, and every hour while the review page is open. The tests run on the new version first; if any
+fail, nothing changes. Your `.env`, `.venv` and data are never touched, and the last 3 versions are kept in
+`_backups`. The review page at http://127.0.0.1:8000 stays online: the new version starts next to the old
+one and takes over once it answers; anything in progress finishes on the old one. You can also press
+**Check for updates** on the review page, or run `START_SPRINT.bat --update`.

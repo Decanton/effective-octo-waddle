@@ -40,6 +40,7 @@
   .stat .n { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
   .stat .l { color:var(--muted); font-size:12px; }
   .stat.ok .n { color:var(--ok); } .stat.warn .n { color:var(--warn); } .stat.info .n { color:var(--info); }
+  button.link { background:none; border:0; padding:0; color:var(--accent, #2563eb); cursor:pointer; font:inherit; text-decoration:underline; }
   .autobar { display:flex; gap:14px; flex-wrap:wrap; align-items:center; padding:8px 20px 0; color:var(--muted); font-size:12px; }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; background:var(--muted); vertical-align:middle; }
   .dot.on { background:var(--ok); }
@@ -145,6 +146,7 @@ const STATE = {
   READY_TO_SUBMIT:  { chip: "ok",   label: "verified ready", group: "ready" },
   NEEDS_USER_INPUT: { chip: "warn", label: "needs you",      group: "needs" },
   NEEDS_LOGIN:      { chip: "info", label: "sign in once",   group: "login" },
+  NEEDS_MANUAL_OTP: { chip: "warn", label: "CAPTCHA / SMS",  group: "login" },
   MANUAL_APPLY:     { chip: "",     label: "apply yourself", group: "manual" },
   SENT_UNCONFIRMED: { chip: "warn", label: "sent? check",    group: "sent" },
   SUBMITTED:        { chip: "ok",   label: "sent",           group: "sent" },
@@ -153,16 +155,27 @@ const FILTERS = [["todo", "To do"], ["ready", "Verified"], ["needs", "Needs you"
 const inFilter = it => { const g = (STATE[it.state] || {}).group; return filter === "all" || (filter === "todo" ? g !== "sent" : g === filter); };
 const stateChip = s => { const d = STATE[s] || { chip: "", label: s }; return `<span class="chip ${d.chip}">${d.label}</span>`; };
 
+let upd = null, firstCommit = null;
 async function load() {
-  const [list, sum] = await Promise.all([fetch("/api/staged").then(r => r.json()), fetch("/api/summary").then(r => r.json())]);
-  items = list; summary = sum;
+  const [list, sum, u] = await Promise.all([fetch("/api/staged").then(r => r.json()), fetch("/api/summary").then(r => r.json()),
+    fetch("/api/update").then(r => r.ok ? r.json() : null).catch(() => null)]);
+  items = list; summary = sum; upd = u;
+  if (u && u.installed) {  // a new version was installed: reload once you're not in the middle of something
+    if (firstCommit && u.installed !== firstCommit && !busy) return location.reload();
+    firstCommit = firstCommit || u.installed;
+  }
   renderTop(); render();
+}
+async function checkUpdate() {
+  $("#autobar").querySelector("#updbtn").textContent = "Checking…";
+  await fetch("/api/update", { method: "POST" }).catch(() => null);
+  setTimeout(load, 4000);
 }
 
 function renderTop() {
   const f = summary.forms, st = summary.settings || {}, sent = summary.sent_today || {};
   const tiles = [["ready", "ok", f.READY_TO_SUBMIT, "Verified, ready to submit"], ["needs", "warn", f.NEEDS_USER_INPUT, "Need your answers"],
-    ["login", "info", f.NEEDS_LOGIN, "Need a sign-in"], ["manual", "", f.MANUAL_APPLY, "Apply yourself"],
+    ["login", "info", (f.NEEDS_LOGIN || 0) + (f.NEEDS_MANUAL_OTP || 0), "Need a sign-in or code"], ["manual", "", f.MANUAL_APPLY, "Apply yourself"],
     ["sent", "ok", (sent.forms || 0) + (sent.email || 0), "Sent today"], ["sent", "", (f.SUBMITTED || 0) + (f.SENT_UNCONFIRMED || 0), "Sent in total"]];
   $("#stats").innerHTML = tiles.map(([g, c, n, l]) => `<button class="stat ${c}" data-g="${g}"><div class="n">${n || 0}</div><div class="l">${l}</div></button>`).join("");
   document.querySelectorAll(".stat").forEach(b => b.onclick = () => { switchTab("jobs"); filter = b.dataset.g; cur = 0; render(); });
@@ -173,7 +186,9 @@ function renderTop() {
     <span><span class="dot ${st.auto_email ? "on" : ""}"></span>Email applications: ${st.auto_email ? `auto-send, up to ${st.email_per_day}/day (${sent.email || 0} today)` : "wait for you"}</span>
     <span><span class="dot ${st.google ? "on" : ""}"></span>Continue with Google: ${st.google ? "on" : "off"}</span>
     ${lr ? `<span>Last run: ${esc(lr.mode)} ${ago(lr.finished_at || lr.started_at)}${lr.jobs_found ? `, ${lr.jobs_kept} of ${lr.jobs_found} jobs kept` : ""}</span>` : ""}
+    ${upd ? `<span>Version ${esc((upd.installed || "?").slice(0, 7))}${upd.busy ? " · updating…" : upd.error ? ` · <span title="${esc(upd.error)}">update held back</span>` : upd.latest && upd.latest !== upd.installed ? " · new version found" : " · up to date"} <button class="link" id="updbtn">Check for updates</button></span>` : ""}
     ${task.running ? `<span class="need">Running now: ${task.what === "login" ? "sign-in window" : "find &amp; apply"}…</span>` : ""}`;
+  const ub = $("#updbtn"); if (ub) ub.onclick = checkUpdate;
   const b = $("#ebadge"); b.hidden = !summary.emails_waiting; b.textContent = summary.emails_waiting || "";
   $("#runsprint").disabled = $("#runlogin").disabled = !!task.running;
 }
@@ -214,6 +229,7 @@ function banner(it) {
       ? `<div class="banner ok">Ready. This job takes applications by email: your CV and the cover letter below go to <b>${esc(h)}</b>.</div>`
       : `<div class="banner ok">Verified ready. Every required field has a value, your tailored CV is attached, and the form shows no errors.</div>`;
     case "NEEDS_USER_INPUT": return `<div class="banner warn">Answer the questions marked <b>needs you</b>, then press Submit.</div>`;
+    case "NEEDS_MANUAL_OTP": return `<div class="banner warn"><b>${esc(h)}</b> asked for a CAPTCHA or a code texted to your phone, and nobody answered within 2 minutes. The next run tries again and alerts you (keep Google Messages open in Job Agent Chrome and SMS codes are read for you). Or apply yourself with the tailored CV.</div>`;
     case "NEEDS_LOGIN": return `<div class="banner info"><b>${esc(h)}</b> wants you signed in. Press <b>Sign in to sites</b> once (Continue with Google works); the next run fills this form. Or apply yourself with the tailored CV.</div>`;
     case "MANUAL_APPLY": return `<div class="banner plain">No form the agent can fill. Open the application and use your tailored CV.</div>`;
     case "SENT_UNCONFIRMED": return `<div class="banner warn">Submit was pressed but no thank-you page appeared. Check the screenshot; it won't be sent again.</div>`;
@@ -243,7 +259,7 @@ function answerRows(it) {
 function renderDetail(it) {
   if (!it) { $("#detail").innerHTML = `<div class="empty"><b>Nothing to review</b>New jobs appear here after each run.</div>`; return; }
   const canSubmit = ["READY_TO_SUBMIT", "NEEDS_USER_INPUT"].includes(it.state);
-  const open = ["MANUAL_APPLY", "NEEDS_LOGIN", "SENT_UNCONFIRMED"].includes(it.state);
+  const open = ["MANUAL_APPLY", "NEEDS_LOGIN", "NEEDS_MANUAL_OTP", "SENT_UNCONFIRMED"].includes(it.state);
   const letter = isMail(it) ? (it.answers.find(a => a.label === "Cover letter") || {}).value : null;
   const rows = answerRows(it);
   const pct = x => Math.round((x || 0) * 100);

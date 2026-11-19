@@ -144,9 +144,18 @@ def load_credentials(conn, ws, host: str) -> tuple[str, str] | None:
         return None
 
 
+def _human(page, kind: str) -> bool:
+    """Ask you (or Google Messages) for a CAPTCHA or SMS code. True when it was cleared."""
+    from . import human_assist_interceptor as hia
+    return hia.assist(page, None) != "timeout"  # detects the kind itself; an invisible badge needs nothing
+
+
 def _verify_email(page, host: str, cfg: dict, since, wait_for_code) -> str:
     if PHONE_CHECK.search(_text(page)):
-        return "needs_you"
+        from . import human_assist_interceptor as hia
+        if hia.detect(page) != "sms" or not _human(page, "sms"):
+            return "needs_you"
+        page.wait_for_timeout(1500)
     if not CODE_PAGE.search(_text(page)):
         return "ok"
     found = wait_for_code(since, host, timeout=float(cfg.get("code_wait_seconds", 60)))
@@ -168,7 +177,7 @@ def sign_in_or_register(page, ws, email: str, cfg: dict, profile: dict | None = 
     wait_for_code = wait_for_code or otp.wait_for_code
     profile = profile or load_profile()
     host = _host(page)
-    if _captcha(page):
+    if _captcha(page) and not _human(page, "captcha"):
         return "captcha"
     with db.session(ws.db_path) as conn:
         saved = load_credentials(conn, ws, host)
@@ -188,17 +197,18 @@ def sign_in_or_register(page, ws, email: str, cfg: dict, profile: dict | None = 
     if not page.locator("input[type=password]:visible").count() or not SIGNUP_WORDS.search(text):
         if not _click_text(page, TO_SIGNUP):
             return "needs_you"
-    if _captcha(page):
-        return "captcha"
     password = generate_password()
     with db.session(ws.db_path) as conn:  # save first, so the password is never lost
         save_credentials(conn, ws, host, email, password)
     _fill_identity(page, email, password, profile)
     if not _tick_terms(page, bool(cfg.get("accept_terms"))):
         return "needs_you"
+    if _captcha(page) and not _human(page, "captcha"):  # you tick the CAPTCHA; the agent presses Create
+        return "captcha"
     if not _click_text(page, SUBMIT_WORDS):
         return "failed"
-    if _captcha(page):
+    page.wait_for_timeout(1500)
+    if _captcha(page) and not _human(page, "captcha"):
         return "captcha"
     result = _verify_email(page, host, cfg, since, wait_for_code)
     if result == "ok":

@@ -67,3 +67,31 @@ email:
   enabled: true
   # Only look at mail from the last N hours (job alerts older than a day are stale anyway).
   lookback_hours: 24
+
+human_assist:
+  # CAPTCHAs and phone (SMS) codes. The agent never solves a CAPTCHA: it brings the
+  # Chrome tab to the front, shows a desktop alert with a chime, and waits for you.
+  enabled: true
+  # How long to wait for you before moving on (the job is then marked NEEDS_MANUAL_OTP).
+  wait_seconds: 120
+  # With Google Messages for Web open in Job Agent Chrome (paired with your phone), the
+  # agent reads the new SMS code itself. Money messages (M-PESA, bank) are never used.
+  sms_wait_seconds: 10
+  # Open Google Messages in Job Agent Chrome whenever the agent starts it.
+  keep_messages_open: true
+  # A steady pace between form steps, so sites aren't hammered.
+  pacing:
+    between_steps_seconds: [1.5, 4.0]
+    between_fields_seconds: [0.2, 0.6]
+
+update:
+  # Install new versions from GitHub by itself. The tests run on the new version first;
+  # if any fail, the current version stays. Your .env, .venv and data are never touched.
+  # The review page switches to the new version without going offline.
+  enabled: true
+  # Check before each daily run, and every N minutes while the review page is open.
+  on_run: true
+  check_minutes: 60
+  run_tests: true
+  branch: main
+  repo: https://github.com/Decanton/effective-octo-waddle.git

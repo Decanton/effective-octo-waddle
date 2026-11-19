@@ -21,6 +21,7 @@ from .. import database as db
 from ..cv_tailor.single_template_tailor import build_cv, load_profile
 from ..intelligence.answer_engine import AnswerEngine
 from . import email_apply, form_fields
+from . import human_assist_interceptor as hia
 
 log = logging.getLogger("jobsprint")
 
@@ -262,6 +263,24 @@ def _needs_login(conn, jid: int, cv_id: int, at_url: str) -> str:
     return "NEEDS_LOGIN"
 
 
+def _needs_manual(conn, jid: int, cv_id: int, at_url: str, kind: str) -> str:
+    what = "a CAPTCHA" if kind == "captcha" else "a code texted to your phone"
+    conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
+                 (jid, cv_id, at_url, "NEEDS_MANUAL_OTP", db.now_iso(),
+                  f"{urlparse(at_url).netloc} asked for {what} and nobody answered in time. The next run tries again "
+                  "(keep Google Messages open in Job Agent Chrome for SMS codes), or apply yourself with the tailored CV."))
+    db.set_job_status(conn, jid, "NEEDS_MANUAL_OTP", f"{what} not answered")
+    return "NEEDS_MANUAL_OTP"
+
+
+def _assist(page, job: dict) -> str:
+    """Hand a blocking CAPTCHA or SMS-code prompt to you (or read the SMS), then continue. Returns the kind left unsolved, or ''."""
+    kind = hia.detect(page)
+    if kind is None or (kind == "captcha" and not hia.blocking_challenge(page)):
+        return ""  # a CAPTCHA inside the form itself is solved when it's submitted
+    return "" if hia.assist(page, job, kind=kind) != "timeout" else kind
+
+
 def _safe(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", s or "").strip("_")[:40]
 
@@ -309,6 +328,9 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
     if page.url != url:
         page.goto(url, wait_until="domcontentloaded")
         page.wait_for_timeout(2500)
+    left = _assist(page, job)
+    if left:
+        return _needs_manual(conn, jid, cv_id, page.url, left)
     if _closed(page) and not form_fields.discover(page):
         conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
                      (jid, cv_id, url, "SKIPPED", db.now_iso(), "The job is closed or the posting was removed."))
@@ -319,9 +341,13 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
         if retry and retry != url:
             page.goto(retry, wait_until="domcontentloaded")
             page.wait_for_timeout(2500)
+        left = _assist(page, job)
+        if left:
+            return _needs_manual(conn, jid, cv_id, page.url, left)
         if _account_page(page):
             return _needs_login(conn, jid, cv_id, page.url)
         url = page.url
+        hia.pause()
     fields = form_fields.discover(page)
     if not fields:
         conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
@@ -333,6 +359,8 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
     for f in fields:
         a = engine.answer(form_fields.to_question(f), job, str(cv_path))
         filled = form_fields.fill_field(page, f, a.value) if not a.consent else False
+        if filled:
+            hia.pause("field")
         rec = {"label": f["label"], "kind": f["kind"], "options": f.get("options", []), "required": f["required"],
                "value": a.value if not isinstance(a.value, bool) else ("Yes" if a.value else "No"),
                "source": a.source, "filled": filled, "needs_user": a.needs_user or (f["required"] and not filled and not a.consent),
@@ -343,6 +371,9 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
         if rec["needs_user"] and not a.consent:
             missing.append(f["label"])
 
+    left = _assist(page, job)  # e.g. a phone check that appeared while filling
+    if left:
+        return _needs_manual(conn, jid, cv_id, page.url, left)
     # Strict check, as a real Submit would see it: every required field filled, CV attached, no errors shown.
     consent_ids = tuple(f["id"] for f, a in zip(fields, answers) if a["consent"])
     problems = form_fields.verify(page, consent_ids)

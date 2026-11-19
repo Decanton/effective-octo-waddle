@@ -85,8 +85,15 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
         btn = form_fields.find_submit(page)
         if btn is None:
             return {"ok": False, "error": "could not find the Submit button; submit it yourself in the open browser"}
+        from . import human_assist_interceptor as hia
+        job = {"company": row["company"], "title": row["title"]}
+        if hia.detect(page) and hia.assist(page, job) == "timeout":  # you tick the CAPTCHA, the agent presses Submit
+            return {"ok": False, "error": "a CAPTCHA or phone code wasn't answered in time; nothing was submitted"}
         log.info("Submitting %s at %s", row["title"], row["company"])
         btn.click()
+        page.wait_for_timeout(1500)
+        if hia.detect(page):  # an image challenge or SMS code after pressing Submit
+            hia.assist(page, job)
         try:
             page.wait_for_function("re => new RegExp(re, 'i').test(document.body.innerText)",
                                    arg=CONFIRM.pattern, timeout=confirm_wait_ms)
