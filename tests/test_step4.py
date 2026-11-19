@@ -369,3 +369,23 @@ def test_chrome_profile_copy_skips_passwords_and_history(tmp_path):
     assert chrome_profile.cloned(ws) == (dest, "Profile 2")
     with pytest.raises(LookupError):
         chrome_profile.find_profile("Nobody", src)
+
+
+@pytest.mark.skipif(not _browser_ok(), reason="Playwright browser not installed")
+def test_onboarding_and_search_pages_are_not_forms(tmp_path, monkeypatch):
+    from src.automation import form_stager
+    from src.automation.browser_manager import browser
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    pages = {"https://weworkremotely.com/job-seekers/onboarding/step_1": "<input type=search><input name=a><input name=b><input type=email>",
+             "https://example.test/careers": "<input name=q><input name=a><input type=email name=email>",
+             "https://example.test/apply": "<input name=a><input name=b><input type=email><input type=file>"}
+    with browser(ws) as ctx:
+        ctx.route("**/*", lambda r: r.fulfill(body=pages.get(r.request.url, "<p>x</p>"), content_type="text/html"))
+        page = ctx.new_page()
+        page.goto("https://weworkremotely.com/job-seekers/onboarding/step_1")
+        assert form_stager._account_page(page) and not form_stager._has_form(page)
+        page.goto("https://example.test/careers")
+        assert not form_stager._has_form(page)  # no CV upload: not an application
+        page.goto("https://example.test/apply")
+        assert form_stager._has_form(page)

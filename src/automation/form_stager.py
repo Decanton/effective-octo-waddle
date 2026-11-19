@@ -47,7 +47,9 @@ def application_url(job: dict) -> str | None:
 APPLY_TEXT = re.compile(r"\bapply\b|application", re.I)
 SKIP_TEXT = re.compile(r"auto-?apply|copilot|with ai|alert|newsletter|subscribe|similar jobs", re.I)
 BLOCKED_TITLE = re.compile(r"just a moment|attention required|access denied|verify you are human", re.I)
-ACCOUNT_URL = re.compile(r"/(sign-?up|sign-?in|log-?in|register|create-account|join|auth|account)(/|\?|$)", re.I)
+ACCOUNT_URL = re.compile(r"/(sign-?up|sign-?in|log-?in|register|create-account|join|auth|account|accounts|onboarding|"
+                         r"welcome|get-started|getting-started|profile/(setup|create|edit)|settings|subscribe|pricing|"
+                         r"checkout|upgrade|premium)(/|\?|$)|/step_?\d", re.I)
 
 
 def _account_page(page) -> bool:
@@ -67,8 +69,12 @@ def _has_form(page) -> bool:
         return False
     try:
         inputs = page.locator("input:visible, textarea:visible, select:visible").count()
-        key = page.locator("input[type=email]:visible, input[type=file], input[name*=email i]:visible, input[id*=email i]:visible").count()
-        return inputs >= 3 and key > 0
+        email = page.locator("input[type=email]:visible, input[name*=email i]:visible, input[id*=email i]:visible").count()
+        # A real application asks for your CV. Off Greenhouse/Lever/Ashby, a page without a
+        # file upload is a search box, newsletter, sign-up or onboarding step, not an application.
+        upload = page.locator("input[type=file]").count()
+        on_ats = any(h in urlparse(page.url).netloc for h in ATS_HOSTS)
+        return inputs >= 3 and (upload > 0 if not on_ats else (upload > 0 or email > 0))
     except Exception:
         return False
 
