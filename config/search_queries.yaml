@@ -45,3 +45,7 @@ onsite_locations_ok: [kenya, nairobi]
 
 # For remote jobs, drop ones restricted to regions you can't work from.
 remote_region_exclude: ["us only", "usa only", "united states only", "us-based", "uk only", "canada only", "eu only", "europe only"]
+
+# A remote job whose location names a specific place is kept only if that
+# place matches one of these. "Remote" alone, or an empty location, is kept.
+remote_locations_ok: [kenya, nairobi, africa, emea, worldwide, anywhere, global, international]

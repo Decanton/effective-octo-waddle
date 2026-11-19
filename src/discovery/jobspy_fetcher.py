@@ -34,8 +34,8 @@ def _val(row, key):
 def fetch(cfg: dict | None = None, max_age: float | None = None) -> list[dict]:
     try:
         from jobspy import scrape_jobs
-    except ImportError:
-        log.error("python-jobspy is not installed; run START_SPRINT.bat once to install it.")
+    except Exception as exc:  # show the real reason, not a guess
+        log.error("Could not load python-jobspy, so LinkedIn was skipped: %s: %s", type(exc).__name__, exc)
         return []
     cfg = cfg or load_yaml("search_queries.yaml")
     max_age = max_age or float(cfg.get("max_age_hours", 24))

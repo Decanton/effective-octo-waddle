@@ -120,3 +120,19 @@ def test_pipeline_saves_and_exports(tmp_path, monkeypatch):
     with db.session(ws.db_path) as c:
         assert db.count_by_status(c) == {"QUALIFIED": 1, "REJECTED_STALE": 1}
         assert c.execute("SELECT COUNT(*) FROM platforms").fetchone()[0] >= 5
+
+
+@pytest.mark.parametrize("loc,keep", [
+    ("Remote", True), ("", True), ("Remote - Kenya", True), ("Remote (EMEA)", True), ("Anywhere", True),
+    ("US - Remote", False), ("San Francisco, CA (Remote)", False), ("Remote, United Kingdom", False),
+])
+def test_remote_location_rules(loc, keep):
+    cfg = load_yaml("search_queries.yaml")
+    from src.intelligence.job_ranker import check_job
+    assert check_job(_job(location=loc, is_remote=True), cfg).keep is keep
+
+
+def test_weak_fit_dropped():
+    out = rank([_job(title="Technical Product Manager, GRC Systems", description="governance risk compliance", url="w")],
+               load_profile(), load_yaml("search_queries.yaml"))
+    assert out[0]["status"] == "REJECTED_KNOCKOUT" and "weak fit" in out[0]["status_reason"]

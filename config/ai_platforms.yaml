@@ -14,8 +14,6 @@ ats_boards:
   - {name: "Anthropic",  kind: greenhouse, board: anthropic}
   - {name: "Scale AI",   kind: greenhouse, board: scaleai}
   - {name: "Labelbox (Alignerr)", kind: greenhouse, board: labelbox}
-  - {name: "Andela",     kind: greenhouse, board: andela}
-  - {name: "Mistral AI", kind: lever,      board: mistral}
   - {name: "OpenAI",     kind: ashby,      board: openai}
   - {name: "Cohere",     kind: ashby,      board: cohere}
   - {name: "Mercor",     kind: ashby,      board: mercor}

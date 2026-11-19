@@ -69,6 +69,9 @@ def check_job(job: dict, search_cfg: dict, platform_cfg: dict | None = None) -> 
                             search_cfg.get("remote_region_exclude"))
         if hit:
             return Verdict(False, "REJECTED_KNOCKOUT", f"remote but '{hit}'")
+        place = re.sub(r"\b(remote|hybrid|work from home|wfh|fully|100%)\b|[()\-–,;/|]", " ", loc).strip()
+        if place and not any(w in loc for w in search_cfg.get("remote_locations_ok", [])):
+            return Verdict(False, "REJECTED_KNOCKOUT", f"remote but limited to '{job.get('location')}'")
     else:
         ok = list(search_cfg.get("onsite_locations_ok", [])) + list((platform_cfg or {}).get("locations_ok", []))
         if not any(w in loc for w in ok):
@@ -117,7 +120,7 @@ def rank(jobs: list[dict], profile: dict, search_cfg: dict, platform_cfg: dict |
             pri = wf * fit + wr * recency_score(j["age_hours"], max_age) + wl * low_applicant_score(j.get("applicant_count"), thr)
             j.update(track=track, fit_score=fit, priority_score=round(pri, 4))
         out.append(j)
-    min_fit = float(w.get("min_fit", 0.15))
+    min_fit = float(w.get("min_fit", 0.30))
     for j in out:
         if j["status"] == "QUALIFIED" and j["fit_score"] < min_fit:
             j.update(status="REJECTED_KNOCKOUT", status_reason=f"weak fit ({j['fit_score']:.2f})")
