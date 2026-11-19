@@ -6,49 +6,52 @@
 <title>Job Sprint Review</title>
 <style>
   :root {
-    --bg:#f4f6f8; --panel:#ffffff; --panel2:#f9fafb; --text:#18202b; --muted:#5f6b7a; --line:#e3e7ec;
-    --accent:#2457c5; --accent-ink:#ffffff; --accent-soft:#e8effc;
+    --bg:#f5f6f8; --panel:#ffffff; --panel2:#f8f9fb; --text:#111827; --muted:#667085; --line:#e6e8ec;
+    --accent:#3554d1; --accent-ink:#ffffff; --accent-soft:#eef1fd; --radius:14px; --radius-sm:9px;
     --ok:#127a46; --ok-soft:#e5f5ec; --warn:#a85a00; --warn-soft:#fdf1e2; --bad:#b42318; --bad-soft:#fdeceb;
     --info:#5b4bc4; --info-soft:#efedfb; --shadow:0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
   }
   @media (prefers-color-scheme: dark) { :root {
-    --bg:#0f1318; --panel:#171c23; --panel2:#1c232b; --text:#e7ebf0; --muted:#9aa6b4; --line:#2a323c;
+    --bg:#0d1117; --panel:#151a22; --panel2:#1a2029; --text:#e8ecf1; --muted:#98a2b3; --line:#262d38;
     --accent:#7aa2f7; --accent-ink:#0f1318; --accent-soft:#1d2a44;
     --ok:#4cc38a; --ok-soft:#14291f; --warn:#f0a645; --warn-soft:#2e2416; --bad:#f97066; --bad-soft:#2f1b1a;
     --info:#a99cf5; --info-soft:#231f3a; --shadow:none; } }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
   html, body { height:100%; }
-  body { margin:0; font:14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--text); display:flex; flex-direction:column; }
+  body { margin:0; font:14px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; -webkit-font-smoothing:antialiased; background:var(--bg); color:var(--text); display:flex; flex-direction:column; }
   a { color:var(--accent); }
-  header { display:flex; align-items:center; gap:18px; padding:10px 20px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:20px; padding:10px 24px; background:color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter:saturate(1.4) blur(8px); border-bottom:1px solid var(--line); flex-wrap:wrap; }
   .brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:16px; }
-  .logo { width:28px; height:28px; border-radius:8px; background:var(--accent); color:var(--accent-ink); display:grid; place-items:center; font-size:14px; }
+  .logo { width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg, var(--accent), var(--info)); color:#fff; display:grid; place-items:center; font-size:13px; letter-spacing:.02em; }
   nav { display:flex; gap:4px; }
   nav button { position:relative; background:none; border:0; padding:7px 12px; color:var(--muted); cursor:pointer; font:inherit; border-radius:8px; }
   nav button:hover { background:var(--panel2); color:var(--text); }
   nav button.on { background:var(--accent-soft); color:var(--accent); font-weight:600; }
   nav .badge { margin-left:6px; background:var(--warn); color:var(--panel); border-radius:999px; padding:0 6px; font-size:11px; font-weight:700; }
   .hdr-actions { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
-  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); padding:7px 13px; border-radius:8px; cursor:pointer; font:inherit; text-decoration:none; white-space:nowrap; }
-  .btn:hover { border-color:var(--muted); }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); padding:7px 14px; border-radius:var(--radius-sm); cursor:pointer; font:inherit; font-weight:500; text-decoration:none; white-space:nowrap; transition:background .15s, border-color .15s, transform .05s; }
+  .btn:hover { border-color:color-mix(in srgb, var(--muted) 60%, var(--line)); background:var(--panel2); }
+  .btn:active { transform:translateY(1px); }
   .btn.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+  .btn.primary:hover { background:color-mix(in srgb, var(--accent) 88%, #000); }
   .btn.ghost { border-color:transparent; background:none; color:var(--muted); }
   .btn:disabled { opacity:.5; cursor:not-allowed; }
-  .stats { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:10px; padding:14px 20px 0; }
-  .stat { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 14px; box-shadow:var(--shadow); cursor:pointer; text-align:left; font:inherit; color:inherit; }
-  .stat:hover { border-color:var(--accent); }
-  .stat .n { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .stats { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:12px; padding:18px 24px 0; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:12px 16px; box-shadow:var(--shadow); cursor:pointer; text-align:left; font:inherit; color:inherit; transition:border-color .15s, transform .15s; }
+  .stat:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .stat .n { font-size:24px; font-weight:700; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
   .stat .l { color:var(--muted); font-size:12px; }
   .stat.ok .n { color:var(--ok); } .stat.warn .n { color:var(--warn); } .stat.info .n { color:var(--info); }
   button.link { background:none; border:0; padding:0; color:var(--accent, #2563eb); cursor:pointer; font:inherit; text-decoration:underline; }
-  .autobar { display:flex; gap:14px; flex-wrap:wrap; align-items:center; padding:8px 20px 0; color:var(--muted); font-size:12px; }
+  .autobar { display:flex; gap:8px 16px; flex-wrap:wrap; align-items:center; padding:10px 24px 0; color:var(--muted); font-size:12px; }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; background:var(--muted); vertical-align:middle; }
   .dot.on { background:var(--ok); }
-  main { flex:1; min-height:0; display:grid; grid-template-columns:minmax(280px, 380px) 1fr; gap:14px; padding:14px 20px 20px; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); }
+  main { flex:1; min-height:0; display:grid; grid-template-columns:minmax(290px, 390px) 1fr; gap:16px; padding:16px 24px 24px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); }
   #side { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
   .tools { padding:10px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:8px; }
-  .search { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel2); color:var(--text); font:inherit; }
+  .search { width:100%; padding:9px 12px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--panel2); color:var(--text); font:inherit; }
   .filters { display:flex; gap:6px; flex-wrap:wrap; }
   .filters button { border:1px solid var(--line); background:var(--panel); color:var(--muted); border-radius:999px; padding:2px 10px; font:inherit; font-size:12px; cursor:pointer; }
   .filters button.on { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
@@ -68,7 +71,10 @@
   #detail { overflow:auto; padding:22px 26px 60px; min-height:0; }
   .dh { display:flex; gap:14px; align-items:flex-start; }
   .dh .av { width:46px; height:46px; font-size:18px; }
-  #detail h2 { margin:0; font-size:20px; line-height:1.3; }
+  #detail h2 { margin:0; font-size:21px; line-height:1.3; letter-spacing:-.01em; }
+  h4 { font-size:13.5px; margin:16px 0 4px; }
+  .src { display:flex; justify-content:space-between; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); }
+  .src b { font-variant-numeric:tabular-nums; }
   .meta { color:var(--muted); font-size:13px; margin-top:2px; }
   .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:16px 0; }
   .banner { border-radius:10px; padding:10px 14px; margin:14px 0; font-size:13.5px; border:1px solid transparent; }
@@ -105,7 +111,7 @@
   #msg { position:fixed; bottom:18px; right:18px; background:var(--text); color:var(--panel); padding:10px 16px; border-radius:10px; display:none; max-width:440px; box-shadow:0 8px 24px rgba(0,0,0,.2); z-index:9; }
   @media (max-width: 1000px) { .stats { grid-template-columns:repeat(3, minmax(0,1fr)); } }
   @media (max-width: 760px) {
-    header { padding:10px 16px; } .hdr-actions { margin-left:0; width:100%; }
+    header { position:static; padding:10px 16px; } .hdr-actions { margin-left:0; width:100%; } nav { overflow-x:auto; max-width:100%; }
     .stats { padding:12px 16px 0; grid-template-columns:repeat(2, minmax(0,1fr)); } .autobar { padding:8px 16px 0; }
     main { grid-template-columns:1fr; padding:12px 16px 16px; } #side { max-height:45vh; } #detail { padding:16px; }
     td.q { width:auto; } .dh .av { display:none; }
@@ -124,7 +130,7 @@
   <div class="hdr-actions">
     <button class="btn" id="runlogin" title="Opens a browser where you sign in to Google and job sites once">Sign in to sites</button>
     <button class="btn" id="runsprint" title="Reads your inbox, finds new jobs, fills forms and sends the complete ones">Find &amp; apply now</button>
-    <button class="btn primary" id="sendall" title="Submit every verified application now">Submit All Verified Jobs</button>
+    <button class="btn primary" id="sendall" title="Send every verified application now">Send all ready</button>
   </div>
 </header>
 <section class="stats" id="stats"></section>
@@ -159,6 +165,9 @@ const STATE = {
   MANUAL_APPLY:     { chip: "",     label: "apply yourself", group: "manual" },
   SENT_UNCONFIRMED: { chip: "warn", label: "sent? check",    group: "sent" },
   SUBMITTED:        { chip: "ok",   label: "sent",           group: "sent" },
+  SKIPPED:          { chip: "",     label: "skipped",        group: "manual" },
+  FAILED:           { chip: "bad",  label: "failed, retried next run", group: "manual" },
+  DEFERRED:         { chip: "info", label: "tomorrow (daily limit)", group: "ready" },
 };
 const FILTERS = [["todo", "To do"], ["ready", "Verified"], ["needs", "Needs you"], ["login", "Sign in"], ["captcha", "CAPTCHA (optional)"], ["manual", "Apply yourself"], ["sent", "Sent"], ["all", "All"]];
 const inFilter = it => { const g = (STATE[it.state] || {}).group; return filter === "all" || (filter === "todo" ? g !== "sent" : g === filter); };
@@ -358,8 +367,9 @@ async function renderResults() {
   const f = r.funnel, steps = [["Found", f.found], ["Good fit", f.qualified], ["Filled", f.staged], ["Sent", f.sent], ["Replied", f.replied], ["Interviews", f.interviews], ["Offers", f.offers]];
   const max = Math.max(1, ...steps.map(s => s[1]));
   const chip = s => ({ interview: "ok", offer: "ok", rejected: "", replied: "info", waiting: "" })[s] ?? "";
-  $("#list").innerHTML = `<div class="tools"><p class="note">Last ${r.days} days</p></div>` + Object.entries(r.by_source).map(([s, v]) =>
-    `<div class="item"><div style="min-width:0"><div class="t">${esc(s)}</div><div class="c">${v.sent} sent · ${v.replied} answered</div></div></div>`).join("");
+  const srcs = Object.entries(r.by_source).sort((a, b) => b[1].sent - a[1].sent);
+  $("#list").innerHTML = `<div class="tools"><b>Where applications went</b><span class="note">Last ${r.days} days</span></div>` + (srcs.map(([s, v]) =>
+    `<div class="src"><span>${esc(s)}</span><span class="note"><b>${v.sent}</b> sent · ${v.replied} answered</span></div>`).join("") || '<div class="empty">Nothing sent yet.</div>');
   $("#detail").innerHTML = `<h2>Results</h2>
     <div class="funnel">${steps.map(([l, n]) => `<div class="fstep"><span class="fl">${l}</span><span class="fbar"><i style="width:${Math.round(n / max * 100)}%"></i></span><b>${n}</b></div>`).join("")}</div>
     <p class="note">${r.response_rate == null ? "No applications sent yet." : `Response rate ${Math.round(r.response_rate * 100)}%.`} A follow-up email goes out by itself after 7 days with no answer (email applications only, once).</p>
@@ -470,7 +480,7 @@ async function renderPlatforms() {
 }
 
 function switchTab(t) {
-  tab = t; $("#q").hidden = t !== "jobs";
+  tab = t; $("#q").hidden = t !== "jobs"; $("#side .tools").hidden = t !== "jobs";
   document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x.dataset.tab === t));
 }
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => { switchTab(b.dataset.tab); render(); });

@@ -15,8 +15,6 @@ A free, local job application and recruiter email agent for a one-hour daily ses
 2. Double-click `START_SPRINT.bat` in this folder. The first run creates a private Python environment and installs what it needs.
 3. It creates a `JobSprintAgent` folder on your Desktop and builds four sample CVs in `JobSprintAgent\tailored_cvs\_samples`. Open them and check every fact.
 
-On macOS or Linux, run `./start_sprint.sh` instead.
-
 ## Commands
 Run these from this folder, after the first run, with `.venv\Scripts\python.exe run_sprint.py ...` (or add the option after `START_SPRINT.bat`).
 
