@@ -45,7 +45,7 @@ def test_render_each_track(tmp_path, track):
     doc = Document(str(path))
     styles = {p.style.name for p in doc.paragraphs}
     assert {"CV Name", "CV Heading", "CV Role", "CV Bullet"} <= styles
-    assert doc.paragraphs[0].text == "DICKENS OWUOR"
+    assert doc.paragraphs[0].text == t.load_profile()["personal"]["full_name"].upper()
 
 
 def test_keyword_reordering_puts_relevant_bullet_first(tmp_path):

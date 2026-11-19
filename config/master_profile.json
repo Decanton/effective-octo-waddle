@@ -2,9 +2,9 @@
   "_about": "Single source of verified facts. Everything here was copied from Kelly's four CV versions (AI Data Specialist, Software, Mechanical, General). The agent may reorder, select and emphasise these facts, but must never invent new ones. Any value set to null is unknown: the agent flags a question as NEEDS_USER_INPUT instead of guessing.",
 
   "personal": {
-    "full_name": "Dickens Owuor",
+    "full_name": "Dickens Owuor Owino",
     "first_name": "Dickens",
-    "last_name": "Owuor",
+    "last_name": "Owino",
     "email": "owuordickens0001@gmail.com",
     "phone": "+254 706 921 015",
     "city": "Nairobi",
@@ -12,7 +12,7 @@
     "location": "Nairobi, Kenya",
     "linkedin": "https://www.linkedin.com/in/dickens-owuor",
     "github": "https://github.com/Decanton",
-    "portfolio": null
+    "portfolio":"https://dickens-portfolio.vercel.app/"
   },
 
   "tracks": {
