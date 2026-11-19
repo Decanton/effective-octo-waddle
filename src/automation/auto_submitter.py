@@ -52,6 +52,9 @@ def sent_today_to(conn, host: str) -> int:
 
 def review_mode(settings: dict | None = None) -> bool:
     """True once Kelly's review period has started (settings 'review_from'): nothing is sent automatically then."""
+    import os
+    if os.environ.get("JOBSPRINT_NO_SUBMIT") == "1":  # fill everything, send nothing (e.g. a run nobody approved)
+        return True
     settings = settings or load_settings()
     start = settings.get("review_from")
     if not start:

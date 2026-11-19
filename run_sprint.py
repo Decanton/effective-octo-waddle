@@ -252,7 +252,9 @@ def main(argv=None) -> int:
         log.info("Queued %d jobs to be staged again.", len(ids))
         if not args.stage_only:
             return 0
-    if args.stage_only:
+    if args.stage_only:  # fills forms and sends nothing, LinkedIn Easy Apply included
+        import os as _os
+        _os.environ["JOBSPRINT_NO_SUBMIT"] = "1"
         stage(ws, log, args.stage_limit)
         return 0
     if args.send_ready:
