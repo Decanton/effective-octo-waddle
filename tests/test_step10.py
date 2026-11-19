@@ -110,3 +110,27 @@ def test_updater_retries_a_flaky_test_once(tmp_path):
     (tmp_path / "test_y.py").write_text("def test_broken():\n    assert False\n")
     ok, summary = updater.run_tests(tmp_path, sys.executable)
     assert not ok and "test_broken" in summary
+
+
+def test_portal_sign_up_does_not_lock_the_database(tmp_path, monkeypatch):
+    """With a real EMAIL_ADDRESS the stager tries to create a portal account; saving its password must not hit
+    'database is locked' (it did on the laptop, so every sign-up page ended FAILED)."""
+    import pytest
+    from tests.test_step4 import FIX, _browser_ok
+    if not _browser_ok():
+        pytest.skip("no browser")
+    from src import database as db
+    from src.automation import form_stager
+    from src.workspace import ensure_workspace
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    monkeypatch.setenv("EMAIL_ADDRESS", "someone@example.com")
+    monkeypatch.setattr("src.automation.portal_accounts.protect", lambda pw, ws: "x", raising=False)
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    url = (FIX / "signup.html").as_uri()
+    with db.session(ws.db_path) as c:
+        db.upsert_job(c, {"url": url, "source": "himalayas", "title": "Data Engineer", "company": "Acme",
+                          "description": "Python SQL", "status": "QUALIFIED", "age_hours": 2, "priority_score": 0.9})
+    monkeypatch.setattr(form_stager, "application_url", lambda job: url)
+    res = form_stager.run(ws, limit=1)
+    assert "FAILED" not in res, res

@@ -79,10 +79,16 @@ def _digest(p: Path) -> str:
         return ""
 
 
+TEST_HIDDEN = {"GEMINI_API_KEY", "GROQ_API_KEY", "OLLAMA_MODEL", "EMAIL_ADDRESS", "EMAIL_APP_PASSWORD",
+               "IMAP_HOST", "IMAP_PORT", "SMTP_HOST", "SMTP_PORT"}
+
+
 def run_tests(src: Path, python: str = sys.executable, retries: int = 1) -> tuple[bool, str]:
     """Run the new version's tests. A failure is retried once on its own, so a timing blip in a browser test
     doesn't block an update; a real failure fails both times."""
-    env = {**os.environ, "JOBSPRINT_HEADLESS": "1", "JOBSPRINT_NO_NOTIFY": "1", "JOBSPRINT_NO_CDP": "1", "PYTHONDONTWRITEBYTECODE": "1"}
+    # The tests get none of your keys or mail settings from .env, so they behave as on any other machine.
+    env = {k: v for k, v in os.environ.items() if k not in TEST_HIDDEN}
+    env.update({"JOBSPRINT_HEADLESS": "1", "JOBSPRINT_NO_NOTIFY": "1", "JOBSPRINT_NO_CDP": "1", "PYTHONDONTWRITEBYTECODE": "1"})
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     out = subprocess.run([python, "-m", "pytest", "-q", "-rf", "-p", "no:cacheprovider"], cwd=str(src), env=env,
                          capture_output=True, text=True, timeout=1800, creationflags=flags)

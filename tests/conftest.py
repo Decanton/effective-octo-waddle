@@ -14,3 +14,15 @@ def _no_internet(monkeypatch):
             raise requests.ConnectionError(f"tests don't use the internet ({url})")
         return real(self, method, url, *a, **k)
     monkeypatch.setattr(requests.sessions.Session, "request", guarded)
+
+
+# Real keys and mail settings from .env (loaded when the updater runs from run_sprint.py) must not change
+# what the tests do: with EMAIL_ADDRESS set, the stager would try "Continue with Google", for example.
+SECRETS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OLLAMA_MODEL", "EMAIL_ADDRESS", "EMAIL_APP_PASSWORD",
+           "IMAP_HOST", "IMAP_PORT", "SMTP_HOST", "SMTP_PORT")
+
+
+@pytest.fixture(autouse=True)
+def _no_real_accounts(monkeypatch):
+    for k in SECRETS:
+        monkeypatch.delenv(k, raising=False)

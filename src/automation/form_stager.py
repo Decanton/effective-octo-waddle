@@ -387,6 +387,7 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
         db.set_job_status(conn, jid, "MANUAL_APPLY", "job board paywall")
         return "MANUAL_APPLY"
     if not url and _account_page(active) and not active.url.startswith("about:"):
+        conn.commit()  # sign-in saves portal passwords on its own connection: release the write lock first
         url = _sign_in_then_retry(active, job, ws)
         if not url:
             return _needs_login(conn, jid, cv_id, active.url)
@@ -410,6 +411,7 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
         db.set_job_status(conn, jid, "SKIPPED", "job closed")
         return "SKIPPED"
     if _account_page(page):
+        conn.commit()
         retry = _sign_in_then_retry(page, job, ws)
         if retry and retry != url:
             page.goto(retry, wait_until="domcontentloaded")
