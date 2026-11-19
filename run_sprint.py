@@ -177,6 +177,9 @@ def main(argv=None) -> int:
     ap.add_argument("--email-only", action="store_true")
     ap.add_argument("--send-ready", action="store_true", help="send complete applications now")
     ap.add_argument("--no-send", action="store_true", help="don't send anything this run")
+    ap.add_argument("--use-chrome-profile", metavar="NAME", help='copy your Chrome profile (e.g. "Dickens Owuor") for the agent')
+    ap.add_argument("--list-chrome-profiles", action="store_true")
+    ap.add_argument("--open-chrome", action="store_true", help="open the agent's Chrome (your copied profile) as a normal window")
     args = ap.parse_args(argv)
     _load_env()
 
@@ -206,6 +209,24 @@ def main(argv=None) -> int:
         return 0
     if args.discover:
         return discover(ws, log)
+    if args.open_chrome:
+        from src.automation.browser_manager import open_chrome
+        open_chrome(ws)
+        return 0
+    if args.list_chrome_profiles:
+        from src.automation.chrome_profile import list_profiles
+        for display, folder in list_profiles().items():
+            print(f"{display}  ({folder})")
+        return 0
+    if args.use_chrome_profile:
+        from src.automation.chrome_profile import clone
+        try:
+            clone(ws, args.use_chrome_profile)
+        except (LookupError, RuntimeError, OSError) as exc:
+            log.error("%s", exc)
+            return 1
+        log.info("The agent now opens job sites with your '%s' sign-ins.", args.use_chrome_profile)
+        return 0
     if args.login_setup:
         from src.automation.browser_manager import login_setup
         login_setup(ws)

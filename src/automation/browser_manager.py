@@ -38,6 +38,14 @@ def find_chrome() -> str | None:
     return shutil.which("google-chrome") or shutil.which("google-chrome-stable")
 
 
+def _copied_profile(ws):
+    from .chrome_profile import cloned
+    try:
+        return cloned(ws)
+    except Exception:
+        return None
+
+
 def profile_dir(ws):
     """One saved profile for every run, so sign-ins you make once are reused."""
     return ws.browser_profile
@@ -51,17 +59,36 @@ def browser(ws, headless: bool | None = None):
         headless = os.environ.get("JOBSPRINT_HEADLESS", "0") == "1"
     exe = os.environ.get("JOBSPRINT_CHROMIUM_PATH") or None
     chrome = None if exe else find_chrome()
+    data_dir, extra = profile_dir(ws), []
+    copy = _copied_profile(ws) if chrome else None
+    if copy:  # your own profile, copied with --use-chrome-profile
+        data_dir, extra = copy[0], [f"--profile-directory={copy[1]}"]
     with sync_playwright() as pw:
         ctx = pw.chromium.launch_persistent_context(
-            str(profile_dir(ws)), headless=headless, executable_path=exe or chrome,
+            str(data_dir), headless=headless, executable_path=exe or chrome,
             viewport={"width": 1280, "height": 900}, accept_downloads=False,
             ignore_default_args=["--enable-automation"],
-            args=["--disable-blink-features=AutomationControlled"])
+            args=["--disable-blink-features=AutomationControlled", *extra])
         ctx.set_default_timeout(15000)
         try:
             yield ctx
         finally:
             ctx.close()
+
+
+def chrome_args(ws) -> list[str]:
+    copy = _copied_profile(ws)
+    return [f"--user-data-dir={copy[0]}", f"--profile-directory={copy[1]}"] if copy else [f"--user-data-dir={profile_dir(ws)}"]
+
+
+def open_chrome(ws, urls: list[str] | None = None) -> None:
+    """Open the agent's Chrome profile as a normal window and return right away."""
+    import subprocess
+    chrome = find_chrome()
+    if not chrome:
+        print("Google Chrome was not found.")
+        return
+    subprocess.Popen([chrome, *chrome_args(ws), "--no-first-run", "--no-default-browser-check", *(urls or [])])
 
 
 def pages_to_sign_in(ws) -> list[tuple[str, str]]:
@@ -99,7 +126,7 @@ def login_setup(ws) -> None:
     msg = (f"\nA browser window is open. On the first tab, sign in to Google as {account or 'your job-search Gmail'}.\n"
            "Then on the other tabs, use 'Continue with Google' (or sign in / sign up) on each site you use.\n")
     if chrome:
-        proc = subprocess.Popen([chrome, f"--user-data-dir={profile_dir(ws)}", "--no-first-run",
+        proc = subprocess.Popen([chrome, *chrome_args(ws), "--no-first-run",
                                  "--no-default-browser-check", *[u for _, u in pages]])
         print(msg + "When you're done, close that Chrome window. The sign-ins are saved for the agent.")
         proc.wait()

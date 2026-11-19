@@ -34,7 +34,13 @@ ALERT_SENDERS = ("linkedin.com", "indeed.com", "indeedemail.com", "glassdoor.com
 ALERT_SUBJECT = re.compile(r"job alert|new jobs?\b|jobs? for you|recommended jobs|jobs? (that )?match|jobs? you may|"
                            r"is hiring|are hiring|new opportunit|top jobs|jobs? near", re.I)
 AUTOMATED = re.compile(r"no-?reply|do-?not-?reply|notifications?@|alerts?@|jobalerts|mailer|newsletter|digest|"
-                       r"updates?@|info@|news@|marketing", re.I)
+                       r"updates?@|info@|news@|marketing|^team@|^hello@|^support@|^applyonline|^apply@|^jobs-listings|"
+                       r"^notify|^community@|^welcome@|^account", re.I)
+# Automatic messages from job sites: confirmations, reminders, receipts. Never answered.
+PLATFORM_SUBJECT = re.compile(r"application (was |has been )?(sent|submitted|received)|thanks? for applying|"
+                              r"thank you for (applying|your application|your interest)|complete your profile|"
+                              r"completed your profile|verify your|confirm your|welcome to|your account|password|"
+                              r"we received your application|application confirmation|application status", re.I)
 RECRUITER = re.compile(r"\b(interview|recruit\w*|hiring|your (application|cv|resume|profile)|opportunit\w+|"
                        r"position|role|vacanc\w+|shortlist\w*|next steps?|assessment|offer)\b", re.I)
 JOB_LINK = re.compile(r"linkedin\.com/(comm/)?jobs/view/|indeed\.com/(viewjob|rc/clk|pagead/clk|m/viewjob)|"
@@ -122,7 +128,9 @@ def is_job_alert(m: dict) -> bool:
 def is_recruiter(m: dict, own_address: str = "") -> bool:
     if m["from_addr"] == own_address.lower() or AUTOMATED.search(m["from_addr"]):
         return False
-    if any(s in m["from_addr"].split("@")[-1] for s in ALERT_SENDERS) and ALERT_SUBJECT.search(m["subject"]):
+    if any(s in m["from_addr"].split("@")[-1] for s in ALERT_SENDERS):
+        return False  # job boards themselves are never recruiters
+    if PLATFORM_SUBJECT.search(m["subject"]):
         return False
     return bool(RECRUITER.search(m["subject"] + " " + m["text"][:3000]))
 

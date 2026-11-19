@@ -51,6 +51,10 @@ def test_recruiter_detection_and_categories():
     assert imap_scanner.is_recruiter(m, "me@example.com") and imap_scanner.category(m) == "interview_request"
     news = imap_scanner.parse_message(_raw("Medium Digest <noreply@medium.com>", "Hiring trends in 2026"), now=_now())
     assert not imap_scanner.is_recruiter(news)
+    for frm, subj in (("Hashlist <team@hashlist.com>", "Dickens Owuor, completed your profile yet?"),
+                      ("Dice <applyonline@dice.com>", "Application for Entry-Level Data Analyst at Dhalite Inc. sent"),
+                      ("Acme Careers <careers@acme.com>", "Thank you for applying to the Data role")):
+        assert not imap_scanner.is_recruiter(imap_scanner.parse_message(_raw(frm, subj, text="your application"), now=_now()))
 
 
 def test_draft_and_send_only_on_request(tmp_path, monkeypatch):
@@ -347,3 +351,21 @@ def test_recruiter_replies_auto_send_only_complete_drafts(tmp_path, monkeypatch)
         assert sent == ["a@acme.com"] and out["waiting"] == 3  # interview has a [FILL IN] gap, rejection skipped, cap 1
         recruiter_replies.auto_send(c, {**cfg, "auto_send": True, "max_per_day": 5}, FakeSMTP)
         assert sent == ["a@acme.com", "d@acme.com"]
+
+
+def test_chrome_profile_copy_skips_passwords_and_history(tmp_path):
+    from src.automation import chrome_profile
+    src = tmp_path / "User Data"
+    (src / "Profile 2" / "Network").mkdir(parents=True)
+    (src / "Profile 2" / "Cache").mkdir()
+    (src / "Local State").write_text(json.dumps({"profile": {"info_cache": {"Default": {"name": "Person 1"}, "Profile 2": {"name": "Dickens Owuor"}}}}))
+    for f in ("Network/Cookies", "Preferences", "Login Data", "History", "Web Data", "Cache/x"):
+        (src / "Profile 2" / f).write_text("x")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    assert chrome_profile.find_profile("dickens owuor", src) == "Profile 2"
+    dest = chrome_profile.clone(ws, "Dickens Owuor", src, check_running=False)
+    got = {p.relative_to(dest / "Profile 2").as_posix() for p in (dest / "Profile 2").rglob("*") if p.is_file()}
+    assert got == {"Network/Cookies", "Preferences"} and (dest / "Local State").exists()
+    assert chrome_profile.cloned(ws) == (dest, "Profile 2")
+    with pytest.raises(LookupError):
+        chrome_profile.find_profile("Nobody", src)
