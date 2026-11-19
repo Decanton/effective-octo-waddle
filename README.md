@@ -30,7 +30,7 @@ Run these from this folder, after the first run, with `.venv\Scripts\python.exe 
 | `run_sprint.py --cv-for job.txt` | Builds a CV tailored to a job description saved in `job.txt` |
 
 ## How jobs are found and ranked
-- **Sources:** LinkedIn through jobspy (Kenya, plus remote roles worldwide), and the public Greenhouse, Lever and Ashby boards listed in `config/ai_platforms.yaml`. Edit searches in `config/search_queries.yaml`.
+- **Sources:** free remote-job boards with exact posting times (Remotive, RemoteOK, Himalayas, Jobicy, We Work Remotely), LinkedIn through jobspy (Kenya, plus remote roles worldwide; it stops for the day if LinkedIn starts blocking), and the public Greenhouse, Lever and Ashby boards listed in `config/ai_platforms.yaml`. Edit searches in `config/search_queries.yaml`.
 - **24-hour rule:** enforced in code (`src/discovery/freshness.py`). Undated or older jobs are dropped. LinkedIn searches only return the last 24 hours, and for the best matches the agent opens the public job page to read the exact age and applicant count.
 - **Knockouts:** titles like Director or Intern, descriptions requiring US citizenship or clearance, onsite jobs outside Kenya, and remote jobs restricted to the US, UK or EU.
 - **Ranking:** 55% fit with your profile, 20% how recent, 25% how few applicants. An unknown applicant count is neutral. Weights live in `master_profile.json` under `ranking_weights`.

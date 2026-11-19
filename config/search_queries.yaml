@@ -3,16 +3,14 @@ max_age_hours: 24            # strict: older or undated jobs are dropped
 
 # Each search runs on every site in `sites`. Track is a hint for CV tailoring.
 searches:
-  - {term: "AI trainer", track: ai_data}
-  - {term: "LLM evaluation", track: ai_data}
-  - {term: "data annotation", track: ai_data}
-  - {term: "prompt engineer", track: ai_data}
-  - {term: "AI data specialist", track: ai_data}
-  - {term: "backend engineer python", track: software}
-  - {term: "software engineer", track: software}
-  - {term: "integration engineer HL7", track: software}
-  - {term: "oracle PL/SQL developer", track: software}
-  - {term: "mechanical engineer", track: mechanical}
+  - {term: '"AI trainer" OR "LLM evaluation" OR "data annotation" OR "AI data specialist"', track: ai_data}
+  - {term: '"prompt engineer" OR "AI tutor" OR "RLHF" OR "model evaluation"', track: ai_data}
+  - {term: '"backend engineer" OR "python developer" OR "software engineer"', track: software}
+  - {term: '"integration engineer" OR "HL7" OR "PL/SQL developer"', track: software}
+  - {term: '"mechanical engineer" OR "design engineer" OR "maintenance engineer"', track: mechanical}
+
+# Free remote-job boards with exact posting times (see src/discovery/remote_boards.py).
+remote_boards: [remotive, remoteok, himalayas, jobicy, weworkremotely]
 
 # Where to look. jobspy has no Indeed/Glassdoor support for Kenya, so LinkedIn
 # carries most of the load: Kenya, plus remote roles open worldwide.
@@ -23,8 +21,9 @@ locations:
 jobspy:
   sites: [linkedin]          # add "indeed", "google" if you want; see README
   results_per_search: 25
-  linkedin_details_top_n: 60 # fetch applicant count + exact age for this many LinkedIn jobs
-  request_pause_seconds: 2.0
+  linkedin_details_top_n: 30 # fetch applicant count + exact age for this many LinkedIn jobs
+  request_pause_seconds: 8.0
+  stop_after_empty_searches: 3  # LinkedIn blocks fast scrapers; give up for the day after 3 empty searches
 
 # Jobs are dropped if any of these appear in the title (case-insensitive).
 title_exclude: [director, "vice president", "vp ", "head of", principal, "staff engineer", intern, internship, sales, recruiter, "account executive", nurse, teacher, driver]

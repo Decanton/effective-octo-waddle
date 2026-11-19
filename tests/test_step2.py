@@ -136,3 +136,43 @@ def test_weak_fit_dropped():
     out = rank([_job(title="Technical Product Manager, GRC Systems", description="governance risk compliance", url="w")],
                load_profile(), load_yaml("search_queries.yaml"))
     assert out[0]["status"] == "REJECTED_KNOCKOUT" and "weak fit" in out[0]["status_reason"]
+
+
+def test_remote_board_parsers():
+    from src.discovery import remote_boards as rb
+    now = datetime.now(timezone.utc)
+    iso_naive = (now - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%S")
+    r = rb.parse_remotive({"jobs": [{"id": 1, "url": "https://r/1", "title": "AI Trainer", "company_name": "R",
+                                     "candidate_required_location": "Worldwide", "publication_date": iso_naive,
+                                     "description": "<p>LLM</p>"}]})
+    assert r[0]["age_hours"] == pytest.approx(3, abs=0.1) and r[0]["is_remote"] and r[0]["location"] == "Worldwide"
+    ok = rb.parse_remoteok([{"legal": "x"}, {"id": 2, "position": "Python Developer", "company": "K",
+                                             "epoch": int((now - timedelta(hours=5)).timestamp()), "url": "https://ok/2",
+                                             "tags": ["python"], "description": "d"}])
+    assert len(ok) == 1 and ok[0]["age_hours"] == pytest.approx(5, abs=0.1)
+    h = rb.parse_himalayas({"jobs": [{"guid": "g", "applicationLink": "https://h/g", "title": "Data Annotator",
+                                      "companyName": "H", "pubDate": int((now - timedelta(hours=30)).timestamp()),
+                                      "locationRestrictions": ["Kenya", "Nigeria"]}]})
+    assert h[0]["age_hours"] == pytest.approx(30, abs=0.1) and h[0]["location"] == "Kenya, Nigeria"
+    jb = rb.parse_jobicy({"jobs": [{"id": 3, "url": "https://j/3", "jobTitle": "Backend Engineer", "companyName": "J",
+                                    "jobGeo": "Anywhere", "pubDate": (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")}]})
+    assert jb[0]["age_hours"] == pytest.approx(1, abs=0.1)
+    from email.utils import format_datetime
+    rss = f"""<rss><channel><item><title>Acme: Prompt Engineer</title><link>https://w/1</link>
+      <region>Anywhere in the World</region><pubDate>{format_datetime(now - timedelta(hours=2))}</pubDate>
+      <description>&lt;p&gt;LLM&lt;/p&gt;</description></item></channel></rss>"""
+    w = rb.parse_wwr(rss)
+    assert w[0]["company"] == "Acme" and w[0]["title"] == "Prompt Engineer" and w[0]["age_hours"] == pytest.approx(2, abs=0.1)
+
+
+def test_linkedin_stops_after_empty_searches(monkeypatch):
+    import pandas as pd
+    import sys, types
+    calls = []
+    fake = types.ModuleType("jobspy")
+    fake.scrape_jobs = lambda **kw: calls.append(kw) or pd.DataFrame()
+    monkeypatch.setitem(sys.modules, "jobspy", fake)
+    from src.discovery import jobspy_fetcher
+    cfg = load_yaml("search_queries.yaml")
+    cfg["jobspy"]["request_pause_seconds"] = 0
+    assert jobspy_fetcher.fetch(cfg) == [] and len(calls) == 3

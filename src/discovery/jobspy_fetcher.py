@@ -46,8 +46,13 @@ def fetch(cfg: dict | None = None, max_age: float | None = None) -> list[dict]:
     hours = int(max_age)
 
     jobs, seen = [], set()
+    empty_in_a_row, max_empty = 0, int(jcfg.get("stop_after_empty_searches", 3))
     for s in cfg.get("searches", []):
         for loc in cfg.get("locations", []):
+            if empty_in_a_row >= max_empty:
+                log.warning("LinkedIn returned nothing %d times in a row (it is probably rate-limiting us). "
+                            "Skipping the remaining LinkedIn searches this run.", empty_in_a_row)
+                return jobs
             try:
                 df = scrape_jobs(site_name=sites, search_term=s["term"],
                                  google_search_term=f"{s['term']} jobs {loc['location']} since yesterday",
@@ -57,7 +62,8 @@ def fetch(cfg: dict | None = None, max_age: float | None = None) -> list[dict]:
                 log.warning("jobspy search '%s' in %s failed: %s", s["term"], loc["location"], exc)
                 time.sleep(pause)
                 continue
-            for row in df.to_dict("records"):
+            empty_in_a_row = empty_in_a_row + 1 if df is None or df.empty else 0
+            for row in ([] if df is None else df.to_dict("records")):
                 url = _val(row, "job_url")
                 if not url or url in seen:
                     continue
