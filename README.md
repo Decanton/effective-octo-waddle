@@ -64,7 +64,7 @@ Everything else waits on the review page, where **Send all ready** sends every c
 Some jobs say "send your CV and cover letter to hr@company.com". The agent finds that address in the job post, or on the page the Apply link opens. It then writes a cover letter that uses only facts from your profile, and emails it with your tailored CV (both as Word files) from `EMAIL_ADDRESS`. It never uses privacy, accessibility, support or no-reply addresses. Each job is emailed once. Set `email_applications` in `config/agent_settings.yaml` (on, with up to 10 a day) to choose whether these go out automatically or wait on the review page, where they show as **by email** with the letter editable.
 
 ## Sign-ins and Continue with Google
-The agent uses your installed Google Chrome with its own profile (`JobSprintAgent\browser_profile_chrome`). Your everyday Chrome profile can't be shared with an automated browser, so sign in to Google once there:
+The agent uses your installed Google Chrome with its own profile (`JobSprintAgent\browser_profile`). Your everyday Chrome profile can't be shared with an automated browser, so sign in to Google once there:
 1. Run `START_SPRINT.bat --login-setup`, or press **Sign in to sites** on the review page. A normal Chrome window opens.
 2. On the first tab, sign in to Google as your job-search Gmail (`EMAIL_ADDRESS`). Use your password or phone prompt; the agent never sees it.
 3. On the other tabs, use **Continue with Google** on each job site, then close the window.

@@ -220,6 +220,10 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
                            profile=profile)
     cv_id = db.add_tailored_cv(conn, jid, cv.track, str(cv_path), cv.matched_keywords)
 
+    try:  # start clean, so a sign-in wall left open by the previous job is never blamed on this one
+        page.goto("about:blank")
+    except Exception:
+        pass
     direct = application_url(job)
     if not direct:  # "send your CV to hr@..." in the job post
         found = email_apply.find_apply_email(job.get("description") or "")

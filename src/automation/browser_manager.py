@@ -39,11 +39,7 @@ def find_chrome() -> str | None:
 
 
 def profile_dir(ws):
-    """Chrome gets its own profile folder, so a profile made by the test browser never confuses it."""
-    if find_chrome() and not os.environ.get("JOBSPRINT_CHROMIUM_PATH"):
-        d = ws.root / "browser_profile_chrome"
-        d.mkdir(parents=True, exist_ok=True)
-        return d
+    """One saved profile for every run, so sign-ins you make once are reused."""
     return ws.browser_profile
 
 
