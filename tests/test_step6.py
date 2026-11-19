@@ -184,7 +184,13 @@ def test_front_door_swaps_versions_without_dropping_requests(tmp_path):
     script = tmp_path / "backend.py"
     script.write_text(BACKEND)
     tags = iter(["v1", "v2"])
-    door = frontdoor.FrontDoor(None, port=0,
+    import socket
+
+    def free_port():
+        with socket.socket() as so:
+            so.bind(("127.0.0.1", 0))
+            return so.getsockname()[1]
+    door = frontdoor.FrontDoor(None, port=0, ports=(free_port(), free_port()),
                                backend_factory=lambda port: frontdoor.Backend(port, [sys.executable, str(script), str(port), next(tags)]))
     door.current = door.start_backend()
     from http.server import ThreadingHTTPServer

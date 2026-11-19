@@ -62,15 +62,15 @@ class Backend:
 
 
 class FrontDoor:
-    def __init__(self, ws, port: int = 8000, backend_factory=Backend):
-        self.ws, self.port, self.factory = ws, port, backend_factory
+    def __init__(self, ws, port: int = 8000, backend_factory=Backend, ports: tuple[int, int] = PORTS):
+        self.ws, self.port, self.factory, self.ports = ws, port, backend_factory, ports
         self.current: Backend | None = None
         self.switch_lock = threading.Lock()
         self.last_switch: dict = {}
 
     def start_backend(self) -> Backend:
         used = self.current.port if self.current else None
-        port = next(p for p in PORTS if p != used)
+        port = next(p for p in self.ports if p != used)
         b = self.factory(port)
         if not b.wait_ready():
             b.stop(grace=0)
