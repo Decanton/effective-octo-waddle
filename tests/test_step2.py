@@ -116,6 +116,7 @@ def test_pipeline_saves_and_exports(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline.ats_api_fetcher, "fetch", lambda cfg: [_job(title="AI Trainer", url="g1")])
     monkeypatch.setattr(pipeline.jobspy_fetcher, "fetch", lambda cfg: [_job(title="Old", age_hours=50, url="l1")])
     monkeypatch.setattr(pipeline.remote_boards, "fetch", lambda boards: [])
+    monkeypatch.setattr(pipeline.more_boards, "fetch", lambda cfg, report=None: [])
     from src.email_agent import imap_scanner
     monkeypatch.setattr(imap_scanner, "fetch", lambda hours: ([], []))
     res = pipeline.run(ws)

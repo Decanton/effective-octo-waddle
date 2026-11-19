@@ -34,7 +34,6 @@ DEFAULT_RSS = [
     {"name": "corporatestaffing", "url": "https://www.corporatestaffing.co.ke/feed/", "location": "Kenya"},
     {"name": "careerpointkenya", "url": "https://www.careerpointkenya.co.ke/feed/", "location": "Kenya"},
     {"name": "opportunitiesforyoungkenyans", "url": "https://opportunitiesforyoungkenyans.co.ke/feed/", "location": "Kenya"},
-    {"name": "myjobmag", "url": "https://www.myjobmag.co.ke/feeds/jobs", "location": "Kenya"},
     {"name": "ngojobsinafrica", "url": "https://ngojobsinafrica.com/feed/", "location": "Kenya"},
 ]
 DEFAULT_HTML = [
