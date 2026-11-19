@@ -33,4 +33,5 @@ def load_settings(path: Path | None = None) -> dict:
     out = {}
     for section, defaults in DEFAULTS.items():
         out[section] = {**defaults, **(data.get(section) or {})}
+    out.update({k: v for k, v in data.items() if k not in out})  # plain top-level settings such as review_from
     return out

@@ -171,3 +171,15 @@ def test_react_select_dropdowns_hidden_toggle_and_ashby_resume(tmp_path, monkeyp
         assert page.locator("#adult").is_checked()
         assert page.locator("#_systemfield_resume").evaluate("e => e.files.length") == 1
         assert form_fields.verify(page) == []
+
+
+def test_per_employer_limits_and_review_mode(tmp_path):
+    from src.automation import auto_submitter as a
+    assert a.site_key("https://job-boards.greenhouse.io/sourcegraph91/jobs/1") == "job-boards.greenhouse.io/sourcegraph91"
+    assert a.site_key("https://jobs.ashbyhq.com/ElevenLabs/x/application") == "jobs.ashbyhq.com/elevenlabs"
+    assert a.site_key("https://careers.acme.com/jobs/1") == "careers.acme.com"
+    assert a.review_mode({"review_from": "2000-01-01T00:00:00+00:00"}) is True
+    assert a.review_mode({"review_from": "2999-01-01T00:00:00+00:00"}) is False
+    assert a.review_mode({"review_from": ""}) is False
+    from src.settings import load_settings
+    assert "review_from" in load_settings()

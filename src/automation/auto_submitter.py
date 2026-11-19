@@ -28,11 +28,41 @@ def sent_today(conn, by_email: bool = False) -> int:
                         (today, int(by_email))).fetchone()[0]
 
 
+SHARED_ATS = ("greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com", "recruitee.com",
+              "breezy.hr", "applytojob.com", "pinpointhq.com", "jobvite.com", "bamboohr.com", "rippling.com")
+
+
+def site_key(url: str) -> str:
+    """One employer's site. On shared application systems (every company's Greenhouse board lives on
+    job-boards.greenhouse.io) the company's part of the path counts too, so the per-site limit is per employer."""
+    u = urlparse(url or "")
+    host = u.netloc.lower()
+    first = next((p for p in u.path.split("/") if p), "")
+    if first and any(host == h or host.endswith("." + h) for h in SHARED_ATS):
+        return f"{host}/{first.lower()}"
+    return host
+
+
 def sent_today_to(conn, host: str) -> int:
-    """Forms sent to this site today (several jobs on one company's Workday count together)."""
+    """Forms sent to this site today (several jobs on one company's Workday count together). `host` may be a site_key."""
     today = datetime.now(timezone.utc).date().isoformat()
     return conn.execute("SELECT COUNT(*) FROM staged_forms WHERE state IN ('SUBMITTED','SENT_UNCONFIRMED') "
-                        "AND substr(submitted_at, 1, 10) = ? AND form_url LIKE ?", (today, f"%://{host}/%")).fetchone()[0]
+                        "AND substr(submitted_at, 1, 10) = ? AND lower(form_url) LIKE ?", (today, f"%://{host}/%")).fetchone()[0]
+
+
+def review_mode(settings: dict | None = None) -> bool:
+    """True once Kelly's review period has started (settings 'review_from'): nothing is sent automatically then."""
+    settings = settings or load_settings()
+    start = settings.get("review_from")
+    if not start:
+        return False
+    try:
+        when = datetime.fromisoformat(str(start))
+    except ValueError:
+        return False
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) >= when
 
 
 def eligible(row, cfg: dict, ecfg: dict | None = None) -> tuple[bool, str, list[str]]:
@@ -59,6 +89,11 @@ def run(ws, settings: dict | None = None, submit_fn=None) -> dict:
     settings = settings or load_settings()
     cfg, ecfg = settings["auto_submit"], settings.get("email_applications") or {}
     counts = {"sent": 0, "not_confirmed": 0, "failed": 0, "waiting_for_you": 0}
+    if review_mode(settings):
+        log.info("Review mode (from %s): complete applications wait for you on the review page.", settings.get("review_from"))
+        with db.session(ws.db_path) as conn:
+            counts["waiting_for_you"] = conn.execute("SELECT COUNT(*) FROM staged_forms WHERE state = 'READY_TO_SUBMIT'").fetchone()[0]
+        return counts
     if not cfg["enabled"] and not ecfg.get("enabled"):
         log.info("Automatic sending is off (config/agent_settings.yaml). Ready forms wait on the review page.")
         return counts
@@ -82,9 +117,10 @@ def run(ws, settings: dict | None = None, submit_fn=None) -> dict:
             counts["waiting_for_you"] += 1
             log.info("Waiting for tomorrow (daily limit reached): %s @ %s", row["title"][:60], row["company"])
             continue
-        host = urlparse(row["form_url"] or "").netloc.lower()
+        host = site_key(row["form_url"] or "")
         if not by_email:
-            limit = int((cfg.get("per_site_per_day") or {}).get(host, cfg.get("per_site_default", 5)))
+            limits = cfg.get("per_site_per_day") or {}
+            limit = int(limits.get(host, limits.get(host.split("/")[0], cfg.get("per_site_default", 5))))
             with db.session(ws.db_path) as conn:
                 if sent_today_to(conn, host) >= limit:
                     counts["waiting_for_you"] += 1

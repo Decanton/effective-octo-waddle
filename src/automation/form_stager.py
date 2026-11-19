@@ -285,6 +285,10 @@ def _linkedin(page, conn, ws, job: dict, cv_id: int, cv_path, engine) -> tuple[s
     if kind == "checkpoint":
         return _needs_manual(conn, jid, cv_id, page.url, "captcha"), None
     if kind == "easy":
+        from .auto_submitter import review_mode
+        if review_mode():  # Easy Apply can't be filled and left for later: it waits until you're back in auto mode
+            db.set_job_status(conn, jid, "QUALIFIED", "LinkedIn Easy Apply: review mode is on, so it wasn't sent")
+            return "DEFERRED", None
         if lea.sent_today(conn) >= int(cfg.get("max_per_day", 40)):
             db.set_job_status(conn, jid, "QUALIFIED", "LinkedIn daily limit reached; tomorrow")
             return "DEFERRED", None

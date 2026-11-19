@@ -1,5 +1,10 @@
 # How far the agent goes on its own. Edit and save; the next run uses it.
 
+# From this time on nothing is sent automatically: complete applications wait on the review page
+# for you to press Submit (Kelly, 2026-11-19: send everything tonight, check them yourself from tomorrow).
+# Leave empty to keep sending automatically.
+review_from: "2026-11-20T09:00:00+03:00"
+
 auto_submit:
   # true: after filling forms, the agent sends every application that is
   # complete, without waiting for you. false: they wait on the review page.
@@ -9,7 +14,7 @@ auto_submit:
   per_site_default: 5
   per_site_per_day: {}
   # Never send more than this many applications in one day.
-  max_per_day: 20
+  max_per_day: 60
   # Only send on these application systems (their forms are standard and
   # show a clear "application received" page).
   only_hosts: [greenhouse.io, lever.co, ashbyhq.com, workable.com, smartrecruiters.com, jobvite.com,
@@ -29,7 +34,7 @@ email_applications:
   # true: sent automatically. false: they wait on the review page for Submit.
   enabled: true
   # Never email more than this many applications in one day.
-  max_per_day: 10
+  max_per_day: 40
 
 google_sign_in:
   # When a job site wants an account, click its "Continue with Google" button and
