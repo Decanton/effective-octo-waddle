@@ -30,5 +30,8 @@ if not exist ".venv\.playwright-ok" (
 )
 
 ".venv\Scripts\python.exe" run_sprint.py %*
+set "RC=%ERRORLEVEL%"
 echo.
-pause
+REM The daily scheduled run (--no-review) closes by itself; a double-click waits so you can read the output.
+echo %* | findstr /c:"--no-review" >nul || pause
+exit /b %RC%

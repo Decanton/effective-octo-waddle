@@ -22,10 +22,112 @@ ats_boards:
   - {name: "GitLab",     kind: greenhouse, board: gitlab}
   - {name: "Wikimedia",  kind: greenhouse, board: wikimedia}
   - {name: "Mozilla",    kind: greenhouse, board: mozilla}
-  - {name: "Remote.com", kind: greenhouse, board: remotecom}
-  - {name: "Turing",     kind: greenhouse, board: turing}
-  - {name: "Deel",       kind: ashby,      board: deel}
   - {name: "Zapier",     kind: ashby,      board: zapier}
+  # Wider net (added 2026-11-19) so there are fresh, fillable forms every day.
+  # Boards that answer "not found" are skipped and listed in the log.
+  - {name: "Turing", kind: greenhouse, board: turing}
+  - {name: "Automattic", kind: greenhouse, board: automatticcareers}
+  - {name: "Stripe", kind: greenhouse, board: stripe}
+  - {name: "Cloudflare", kind: greenhouse, board: cloudflare}
+  - {name: "Datadog", kind: greenhouse, board: datadog}
+  - {name: "Elastic", kind: greenhouse, board: elastic}
+  - {name: "MongoDB", kind: greenhouse, board: mongodb}
+  - {name: "Twilio", kind: greenhouse, board: twilio}
+  - {name: "HubSpot", kind: greenhouse, board: hubspot}
+  - {name: "Dropbox", kind: greenhouse, board: dropbox}
+  - {name: "Figma", kind: greenhouse, board: figma}
+  - {name: "Coinbase", kind: greenhouse, board: coinbase}
+  - {name: "Reddit", kind: greenhouse, board: reddit}
+  - {name: "Discord", kind: greenhouse, board: discord}
+  - {name: "Duolingo", kind: greenhouse, board: duolingo}
+  - {name: "Airtable", kind: greenhouse, board: airtable}
+  - {name: "Asana", kind: greenhouse, board: asana}
+  - {name: "Instacart", kind: greenhouse, board: instacart}
+  - {name: "Grafana Labs", kind: greenhouse, board: grafanalabs}
+  - {name: "Sourcegraph", kind: greenhouse, board: sourcegraph91}
+  - {name: "Toptal", kind: greenhouse, board: toptal}
+  - {name: "Invisible Technologies", kind: greenhouse, board: invisibletech}
+  - {name: "Appen", kind: greenhouse, board: appen}
+  - {name: "Hugging Face", kind: greenhouse, board: huggingface}
+  - {name: "Databricks", kind: greenhouse, board: databricks}
+  - {name: "Samsara", kind: greenhouse, board: samsara}
+  - {name: "Okta", kind: greenhouse, board: okta}
+  - {name: "PagerDuty", kind: greenhouse, board: pagerduty}
+  - {name: "Vimeo", kind: greenhouse, board: vimeo}
+  - {name: "Webflow", kind: greenhouse, board: webflow}
+  - {name: "Zendesk", kind: greenhouse, board: zendesk}
+  - {name: "Chipper Cash", kind: greenhouse, board: chippercash}
+  - {name: "Flutterwave", kind: greenhouse, board: flutterwave}
+  - {name: "Moniepoint", kind: greenhouse, board: moniepoint}
+  - {name: "M-KOPA", kind: greenhouse, board: mkopa}
+  - {name: "Sendwave", kind: greenhouse, board: sendwave}
+  - {name: "Ona", kind: greenhouse, board: ona}
+  - {name: "Kopo Kopo", kind: greenhouse, board: kopokopo}
+  - {name: "Twiga Foods", kind: greenhouse, board: twigafoods}
+  - {name: "Safeboda", kind: greenhouse, board: safeboda}
+  - {name: "Aerospike", kind: greenhouse, board: aerospike}
+  - {name: "Doist", kind: greenhouse, board: doist}
+  - {name: "Hotjar", kind: greenhouse, board: hotjar}
+  - {name: "Toggl", kind: greenhouse, board: toggl}
+  - {name: "Kraken", kind: greenhouse, board: kraken}
+  - {name: "Consensys", kind: greenhouse, board: consensys}
+  - {name: "Chainlink Labs", kind: greenhouse, board: chainlinklabs}
+  - {name: "Celonis", kind: greenhouse, board: celonis}
+  - {name: "Spotify", kind: lever, board: spotify}
+  - {name: "Palantir", kind: lever, board: palantir}
+  - {name: "Plaid", kind: lever, board: plaid}
+  - {name: "Wave", kind: lever, board: wave}
+  - {name: "Binance", kind: lever, board: binance}
+  - {name: "Welocalize", kind: lever, board: welocalize}
+  - {name: "TELUS International AI", kind: lever, board: telusinternational}
+  - {name: "Shield AI", kind: lever, board: shieldai}
+  - {name: "Mistral AI", kind: lever, board: mistral}
+  - {name: "Kiva", kind: lever, board: kiva}
+  - {name: "Zipline", kind: lever, board: flyzipline}
+  - {name: "Jumia", kind: lever, board: jumia}
+  - {name: "Sama", kind: lever, board: sama}
+  - {name: "CloudFactory", kind: lever, board: cloudfactory}
+  - {name: "Gro Intelligence", kind: lever, board: grointelligence}
+  - {name: "Andela", kind: lever, board: andela}
+  - {name: "Netflix", kind: lever, board: netflix}
+  - {name: "Lightcast", kind: lever, board: lightcast}
+  - {name: "Outreach", kind: lever, board: outreach}
+  - {name: "Notion", kind: ashby, board: notion}
+  - {name: "Linear", kind: ashby, board: linear}
+  - {name: "Ramp", kind: ashby, board: ramp}
+  - {name: "Vercel", kind: ashby, board: vercel}
+  - {name: "Supabase", kind: ashby, board: supabase}
+  - {name: "PostHog", kind: ashby, board: posthog}
+  - {name: "Replit", kind: ashby, board: replit}
+  - {name: "Deepgram", kind: ashby, board: deepgram}
+  - {name: "ElevenLabs", kind: ashby, board: elevenlabs}
+  - {name: "Perplexity", kind: ashby, board: perplexity}
+  - {name: "Hightouch", kind: ashby, board: hightouch}
+  - {name: "Modal", kind: ashby, board: modal}
+  - {name: "Pinecone", kind: ashby, board: pinecone}
+  - {name: "Weights & Biases", kind: ashby, board: wandb}
+  - {name: "Runway", kind: ashby, board: runway}
+  - {name: "Harvey", kind: ashby, board: harvey}
+  - {name: "Sierra", kind: ashby, board: sierra}
+  - {name: "Handshake", kind: ashby, board: handshake}
+  - {name: "Snorkel AI", kind: ashby, board: snorkelai}
+  - {name: "Invisible", kind: ashby, board: invisible}
+  - {name: "Micro1", kind: ashby, board: micro1}
+  - {name: "Prolific", kind: ashby, board: prolific}
+  - {name: "Toloka", kind: ashby, board: toloka}
+  - {name: "Surge AI", kind: ashby, board: surgeai}
+  - {name: "Deel", kind: ashby, board: deel}
+  - {name: "Zapier", kind: ashby, board: zapier}
+  - {name: "Remote", kind: ashby, board: remote}
+  - {name: "Oyster", kind: ashby, board: oyster}
+  - {name: "Multiverse", kind: ashby, board: multiverse}
+  - {name: "Cursor", kind: ashby, board: anysphere}
+  - {name: "Lovable", kind: ashby, board: lovable}
+  - {name: "Mintlify", kind: ashby, board: mintlify}
+  - {name: "Clerk", kind: ashby, board: clerk}
+  - {name: "Resend", kind: ashby, board: resend}
+  - {name: "n8n", kind: ashby, board: n8n}
+  - {name: "Docker", kind: ashby, board: docker}
 
 evergreen_platforms:
   - {name: "AfterQuery",     url: "https://experts.afterquery.com/apply", track: ai_data}

@@ -1,0 +1,26 @@
+# How far the agent goes on its own. Edit and save; the next run uses it.
+
+auto_submit:
+  # true: after filling forms, the agent sends every application that is
+  # complete, without waiting for you. false: they wait on the review page.
+  enabled: true
+  # Never send more than this many applications in one day.
+  max_per_day: 20
+  # Only send on these application systems (their forms are standard and
+  # show a clear "application received" page).
+  only_hosts: [greenhouse.io, lever.co, ashbyhq.com]
+  # Many forms have a required "I agree to the privacy policy" box.
+  # false: those forms wait for you on the review page.
+  # true: the agent ticks required privacy/consent boxes for you.
+  accept_required_consents: false
+  # Forms with a CAPTCHA need a person; they always wait for you.
+  # Seconds to wait for the "thank you" page after pressing Submit.
+  confirm_wait_seconds: 60
+
+email:
+  # Read job alerts and recruiter messages from the inbox in .env (EMAIL_ADDRESS).
+  enabled: true
+  # Only look at mail from the last N hours (job alerts older than a day are stale anyway).
+  lookback_hours: 24
+  # Recruiter replies are always drafted for you to send from the review page.
+  # The agent never sends email on its own.

@@ -8,7 +8,7 @@ A free, local job application and recruiter email agent for a one-hour daily ses
 | 1 | Desktop folder, database, your profile, master CV template, CV tailoring, launchers | Done |
 | 2 | Job discovery (last 24 hours only) and ranking by fit and low applicant count | Done |
 | 3 | Tailored CV per job, form filling that stops before Submit, review page at http://127.0.0.1:8000 | Done |
-| 4 | Inbox scanning and recruiter reply drafts that you approve before sending | Next |
+| 4 | Automatic sending (daily cap), sign-in once per site, Gmail job alerts and recruiter reply drafts, daily scheduled run | Done |
 
 ## First run on Windows
 1. Install Python 3.11 or newer from python.org if you haven't (tick "Add python.exe to PATH").
@@ -22,8 +22,13 @@ Run these from this folder, after the first run, with `.venv\Scripts\python.exe 
 
 | Command | What it does |
 |---|---|
-| `run_sprint.py` | Daily sprint: profile check, find and rank jobs, fill forms (stopping before Submit), then open the review page |
-| `run_sprint.py --login-setup` | Opens the saved browser so you can sign in to LinkedIn, AfterQuery and others once |
+| `run_sprint.py` | Daily sprint: read the inbox, find and rank jobs, fill forms, send the complete ones (see Automatic sending), then open the review page |
+| `run_sprint.py --no-send` | Same, but sends nothing this time |
+| `run_sprint.py --send-ready` | Sends the complete applications now, with the same rules |
+| `run_sprint.py --email-only` | Reads the inbox only: job alerts go into the job list, recruiter emails get a draft reply |
+| `INSTALL_DAILY_RUN.bat` | Double-click once to run the sprint by itself every day at a time you choose |
+| `run_sprint.py --login-setup` | Opens the saved browser so you can sign in (or sign up) once to LinkedIn, Himalayas and every site where a job was waiting for a sign-in |
+| `run_sprint.py --restage --stage-only` | Tries again the jobs that needed a sign-in or had no form |
 | `run_sprint.py --stage-only --stage-limit 5` | Fills forms for the top 5 qualified jobs, without submitting |
 | `run_sprint.py --review` | Opens the review page at http://127.0.0.1:8000 |
 | `run_sprint.py --discover` | Finds jobs posted in the last 24 hours, ranks them and saves a CSV in `JobSprintAgent\exports` |
@@ -40,10 +45,28 @@ Run these from this folder, after the first run, with `.venv\Scripts\python.exe 
 - **AI platforms** with no dated postings (AfterQuery, Outlier, Alignerr, DataAnnotation, Mercor) are listed each run until you mark them applied.
 
 ## Applying: what happens and what never happens
-- For each top job the agent builds a tailored CV, opens the real application form (Greenhouse, Lever or Ashby, including ones linked from remote job boards), fills what it can from your profile, uploads the CV and takes a screenshot. It **never presses Submit** while staging.
-- Questions your profile can't answer are flagged **needs you**. Demographic questions get "decline to self-identify" when offered. Consent and privacy boxes are never ticked for you: you tick them on the review page.
+- For each top job the agent builds a tailored CV, opens the real application form (Greenhouse, Lever or Ashby, including ones linked from remote job boards), fills what it can from your profile, uploads the CV and takes a screenshot. Staging never presses Submit. Sending happens afterwards, under the rules in Automatic sending.
+- Questions your profile can't answer are flagged **needs you**. Demographic questions get "decline to self-identify" when offered. Consent and privacy boxes are ticked only if you allow it in `config/agent_settings.yaml`. Otherwise you tick them on the review page.
 - Written questions ("Why do you want to work here?") get a short AI draft from Gemini or Groq using only your profile. It is marked **AI draft** for you to read and edit.
 - On the review page, **Submit** reopens the form, fills it again with your edits, and presses Submit in a visible browser so you can solve any CAPTCHA. **Skip** drops the job. Jobs with no supported form show **Open application** and your tailored CV to apply yourself.
+
+## Automatic sending
+Settings live in `config/agent_settings.yaml`. With `auto_submit.enabled: true` the daily run sends an application by itself only when:
+- every required question is answered and your tailored CV is attached;
+- the form is on Greenhouse, Lever or Ashby (`only_hosts`);
+- there's no CAPTCHA;
+- there's no required consent box, unless you set `accept_required_consents: true`;
+- fewer than `max_per_day` applications went out today.
+
+Everything else waits on the review page, where **Send all ready** sends every complete form at once. A form where Submit was pressed but no thank-you page appeared is marked **sent? check** and is never sent twice.
+
+## Sign-ins
+Some sites need an account before you can apply. Those jobs show **sign in once**. Run `START_SPRINT.bat --login-setup`, then sign in or sign up yourself on each tab. The browser remembers you, and the agent never sees your passwords. Then run `START_SPRINT.bat --restage --stage-only` and those forms get filled.
+
+## Email
+With `EMAIL_ADDRESS` and `EMAIL_APP_PASSWORD` in `.env`, each run reads the last 24 hours of the inbox. It opens the inbox read-only, so nothing is marked read or moved.
+- **Job alerts** (LinkedIn, Indeed, Glassdoor, Himalayas, BrighterMonday and others) become jobs in the normal list.
+- **Recruiter emails** show on the **Recruiter emails** tab with a draft reply. Replies go out only when you press **Send reply**.
 
 ## Your profile
 `config/master_profile.json` holds every fact the agent may use, taken from your four CVs. The agent never invents anything. Fill in the `screening_answers` that are `null` (notice period, salary, work authorisation and so on). Until you do, any form that asks them is flagged `NEEDS_USER_INPUT` for you to answer.

@@ -177,6 +177,17 @@ def _follow_to_ats(page, job: dict, depth: int = 2) -> str | None:
     return page.url if _has_form(page) else None
 
 
+def _needs_login(conn, jid: int, cv_id: int, at_url: str) -> str:
+    """The site wants an account. Run --login-setup, sign in once, and the next run retries it."""
+    host = urlparse(at_url).netloc
+    conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
+                 (jid, cv_id, at_url, "NEEDS_LOGIN", db.now_iso(),
+                  f"{host} wants you signed in. Run START_SPRINT.bat --login-setup once and sign in there "
+                  "(or create your account); the next run fills this form. Or apply yourself with your tailored CV."))
+    db.set_job_status(conn, jid, "NEEDS_LOGIN", f"sign in once at {host}")
+    return "NEEDS_LOGIN"
+
+
 def _safe(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", s or "").strip("_")[:40]
 
@@ -189,6 +200,8 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
     cv_id = db.add_tailored_cv(conn, jid, cv.track, str(cv_path), cv.matched_keywords)
 
     url = application_url(job) or _follow_to_ats(page, job)
+    if not url and _account_page(page) and not page.url.startswith("about:"):
+        return _needs_login(conn, jid, cv_id, page.url)
     if not url:
         conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
                      (jid, cv_id, job.get("apply_url") or job["url"], "MANUAL_APPLY", db.now_iso(),
@@ -199,11 +212,7 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
     page.goto(url, wait_until="domcontentloaded")
     page.wait_for_timeout(2500)
     if _account_page(page):
-        conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
-                     (jid, cv_id, job.get("apply_url") or job["url"], "MANUAL_APPLY", db.now_iso(),
-                      "The site wants you to sign in or create an account first. Apply yourself with your tailored CV."))
-        db.set_job_status(conn, jid, "MANUAL_APPLY", "site needs an account; apply yourself")
-        return "MANUAL_APPLY"
+        return _needs_login(conn, jid, cv_id, page.url)
     fields = form_fields.discover(page)
     if not fields:
         conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",

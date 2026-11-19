@@ -47,9 +47,10 @@
 <body>
 <header>
   <h1>Job Sprint review</h1>
-  <div class="tabs"><button data-tab="jobs" class="on">Applications</button><button data-tab="platforms">AI platforms</button></div>
+  <div class="tabs"><button data-tab="jobs" class="on">Applications</button><button data-tab="emails">Recruiter emails</button><button data-tab="platforms">AI platforms</button></div>
   <span class="help">Keys: ↑/↓ move · Enter submit · Backspace skip</span>
   <span id="counts"></span>
+  <button class="btn primary" id="sendall" title="Send every complete application now">Send all ready</button>
 </header>
 <main>
   <div id="list"></div>
@@ -61,18 +62,21 @@ let items = [], cur = 0, tab = "jobs", busy = false;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const say = (t, ms = 4000) => { const m = $("#msg"); m.textContent = t; m.style.display = "block"; clearTimeout(say.t); say.t = setTimeout(() => m.style.display = "none", ms); };
-const stateChip = s => s === "READY_TO_SUBMIT" ? '<span class="chip ok">ready</span>' : s === "NEEDS_USER_INPUT" ? '<span class="chip warn">needs you</span>' : '<span class="chip">apply yourself</span>';
+const CHIPS = { READY_TO_SUBMIT: '<span class="chip ok">ready</span>', NEEDS_USER_INPUT: '<span class="chip warn">needs you</span>',
+  NEEDS_LOGIN: '<span class="chip warn">sign in once</span>', SENT_UNCONFIRMED: '<span class="chip warn">sent? check</span>' };
+const stateChip = s => CHIPS[s] || '<span class="chip">apply yourself</span>';
 
 async function load() {
   const [list, sum] = await Promise.all([fetch("/api/staged").then(r => r.json()), fetch("/api/summary").then(r => r.json())]);
   items = list; cur = Math.min(cur, Math.max(0, items.length - 1));
   const f = sum.forms;
-  $("#counts").textContent = `${f.READY_TO_SUBMIT || 0} ready · ${f.NEEDS_USER_INPUT || 0} need you · ${f.MANUAL_APPLY || 0} apply yourself · ${f.SUBMITTED || 0} submitted`;
+  $("#counts").textContent = `${f.READY_TO_SUBMIT || 0} ready · ${f.NEEDS_USER_INPUT || 0} need you · ${f.MANUAL_APPLY || 0} apply yourself · ${f.NEEDS_LOGIN || 0} need a sign-in · ${(f.SUBMITTED || 0) + (f.SENT_UNCONFIRMED || 0)} sent`;
   render();
 }
 
 function render() {
   if (tab === "platforms") return renderPlatforms();
+  if (tab === "emails") return renderEmails();
   $("#list").innerHTML = items.map((it, i) => `
     <div class="item ${i === cur ? "on" : ""}" data-i="${i}">
       <div class="t">${esc(it.title)}</div><div class="c">${esc(it.company || "")}</div>
@@ -95,13 +99,13 @@ function render() {
     const flag = a.needs_user ? '<span class="need">needs you</span>' : a.source === "ai_draft" ? '<span class="chip warn">AI draft</span>' : `<span class="note">${esc(a.source || "")}</span>`;
     return `<tr><td>${esc(a.label)}${a.required ? " *" : ""}<div class="note">${esc(a.note || "")}</div></td><td class="v">${v}</td><td>${flag}</td></tr>`;
   }).join("");
-  const manual = it.state === "MANUAL_APPLY";
+  const manual = ["MANUAL_APPLY", "NEEDS_LOGIN", "SENT_UNCONFIRMED"].includes(it.state);
   $("#detail").innerHTML = `
     <h2>${esc(it.title)}</h2>
     <div class="note">${esc(it.company || "")} · ${esc(it.location || "")} · priority ${(it.priority_score || 0).toFixed(2)} · fit ${(it.fit_score || 0).toFixed(2)} · from ${esc(it.source)}</div>
     <div class="row">
       ${manual ? `<a class="btn primary" href="${esc(it.form_url || it.url)}" target="_blank" rel="noopener">Open application</a>
-                  <button class="btn" id="done">I applied myself</button>`
+                  <button class="btn" id="done">${it.state === "SENT_UNCONFIRMED" ? "Yes, it was sent" : "I applied myself"}</button>`
                : `<button class="btn primary" id="submit">Submit (Enter)</button>`}
       <button class="btn" id="skip">Skip (Backspace)</button>
       ${it.has_cv ? `<a class="btn" href="/files/cv/${it.id}">Download tailored CV</a>` : ""}
@@ -117,6 +121,51 @@ function render() {
   if ($("#done")) $("#done").onclick = () => post(`/api/applied_myself/${it.id}`).then(() => { say("Marked as applied."); load(); });
 }
 
+$("#sendall").onclick = async () => {
+  const n = items.filter(i => i.state === "READY_TO_SUBMIT").length;
+  if (!n) return say("No complete applications to send.");
+  if (!confirm(`Send all ${n} ready applications now? Forms with a CAPTCHA or a consent box you haven't allowed stay here.`)) return;
+  try { await post("/api/submit_all"); } catch (e) { return say("Error: " + e.message, 8000); }
+  say("Sending… browser windows open one by one. This page updates when it's done.", 600000);
+  const poll = setInterval(async () => {
+    const st = await fetch("/api/submit_all").then(r => r.json());
+    if (!st.running) { clearInterval(poll); const r = st.result || {};
+      say(`Done: ${r.sent || 0} sent, ${r.not_confirmed || 0} sent without a thank-you page, ${r.failed || 0} failed, ${r.waiting_for_you || 0} still need you.`, 15000); load(); }
+  }, 4000);
+};
+
+let emails = [], ecur = 0;
+async function renderEmails() {
+  emails = await fetch("/api/emails").then(r => r.json());
+  ecur = Math.min(ecur, Math.max(0, emails.length - 1));
+  $("#list").innerHTML = emails.map((m, i) => `
+    <div class="item ${i === ecur ? "on" : ""}" data-e="${i}">
+      <div class="t">${esc(m.subject || "(no subject)")}</div><div class="c">${esc(m.from_name || m.from_addr)}</div>
+      <div class="chips">${m.state === "SENT" ? '<span class="chip ok">replied</span>' : '<span class="chip warn">draft ready</span>'}
+        <span class="chip">${esc((m.category || "other").replace("_", " "))}</span></div>
+    </div>`).join("") || '<p class="note" style="padding:14px">No recruiter emails in the last day.</p>';
+  document.querySelectorAll("[data-e]").forEach(el => el.onclick = () => { ecur = +el.dataset.e; renderEmails(); });
+  const m = emails[ecur];
+  if (!m) { $("#detail").innerHTML = '<p class="note">Nothing here yet.</p>'; return; }
+  const sent = m.state === "SENT";
+  $("#detail").innerHTML = `
+    <h2>${esc(m.subject || "(no subject)")}</h2>
+    <div class="note">From ${esc(m.from_name || "")} &lt;${esc(m.from_addr)}&gt; · ${esc(m.received_at || "")}</div>
+    <pre style="white-space:pre-wrap;font:inherit;background:var(--panel);border:1px solid var(--line);padding:12px;border-radius:8px;max-height:40vh;overflow:auto">${esc(m.body_text || "")}</pre>
+    <p class="note">${sent ? "Your reply (sent " + esc(m.sent_at) + "):" : "Draft reply. Edit it, replace any [FILL IN ...] gaps, then press Send. Nothing is sent until you do."}</p>
+    <textarea id="reply" style="width:100%;min-height:220px" ${sent ? "readonly" : ""}>${esc(m.draft_reply || "")}</textarea>
+    <div class="row">${sent ? "" : '<button class="btn primary" id="esend">Send reply</button><button class="btn" id="edismiss">Not a recruiter, hide</button>'}</div>`;
+  if (!sent) {
+    $("#esend").onclick = async () => {
+      if (!confirm(`Send this reply to ${m.from_addr}?`)) return;
+      try { const r = await post(`/api/emails/${m.id}/send`, { body: $("#reply").value }); say(r.ok ? "Reply sent." : "Not sent: " + r.error, 8000); }
+      catch (e) { say("Error: " + e.message, 8000); }
+      renderEmails();
+    };
+    $("#edismiss").onclick = () => post(`/api/emails/${m.id}/dismiss`).then(renderEmails);
+  }
+}
+
 async function post(url, body) {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
@@ -124,7 +173,7 @@ async function post(url, body) {
 }
 
 async function submit() {
-  const it = items[cur]; if (!it || busy || it.state === "MANUAL_APPLY") return;
+  const it = items[cur]; if (!it || busy || !["READY_TO_SUBMIT", "NEEDS_USER_INPUT"].includes(it.state)) return;
   const overrides = {}, consents = [];
   document.querySelectorAll("[data-ov]").forEach(el => { if (el.value) overrides[el.dataset.ov] = el.value; });
   document.querySelectorAll("[data-consent]").forEach(el => { if (el.checked) consents.push(el.dataset.consent); });

@@ -12,12 +12,21 @@ from . import ai_platforms, ats_api_fetcher, jobspy_fetcher, remote_boards
 from .common import load_yaml, log
 
 
-def run(ws, run_id: int | None = None, sources=("jobspy", "ats", "remote")) -> dict:
+def run(ws, run_id: int | None = None, sources=("email", "jobspy", "ats", "remote")) -> dict:
     profile = load_profile()
     search_cfg = load_yaml("search_queries.yaml")
     platform_cfg = load_yaml("ai_platforms.yaml")
 
-    raw = []
+    raw, recruiters = [], []
+    if "email" in sources:
+        from ..email_agent import imap_scanner
+        from ..settings import load_settings
+        ecfg = load_settings()["email"]
+        if ecfg["enabled"]:
+            mail_jobs, recruiters = imap_scanner.fetch(float(ecfg["lookback_hours"]))
+            # Alert emails carry only a title and link; read LinkedIn's public page for the rest.
+            pause = float(search_cfg.get("jobspy", {}).get("request_pause_seconds", 2.0))
+            raw += jobspy_fetcher.enrich_linkedin(mail_jobs, 40, min(pause, 3.0))
     if "ats" in sources:
         raw += ats_api_fetcher.fetch(platform_cfg)
     if "remote" in sources:
@@ -40,6 +49,11 @@ def run(ws, run_id: int | None = None, sources=("jobspy", "ats", "remote")) -> d
             if j.get("url"):
                 db.upsert_job(conn, j, run_id)
         platforms = ai_platforms.sync_platforms(conn, platform_cfg)
+        if recruiters:
+            from ..email_agent import recruiter_replies
+            added = recruiter_replies.save(conn, recruiters, profile)
+            if added:
+                log.info("%d new recruiter emails, with draft replies on the review page (Emails tab).", added)
 
     qualified = [j for j in ranked if j["status"] == "QUALIFIED"]
     def _why(j):
@@ -68,4 +82,4 @@ def run(ws, run_id: int | None = None, sources=("jobspy", "ats", "remote")) -> d
     todo = [p["name"] for p in platforms if p["status"] == "NOT_APPLIED"]
     if todo:
         print(f"\nAI platforms you haven't marked as applied: {', '.join(todo)}")
-    return {"found": len(raw), "kept": len(qualified), "export": str(export)}
+    return {"found": len(raw), "kept": len(qualified), "export": str(export), "emails": len(recruiters)}

@@ -38,8 +38,8 @@ def create_app(ws) -> FastAPI:
                        j.priority_score, j.fit_score, j.url, j.source, t.docx_path, t.matched_keywords,
                        (SELECT path FROM screenshots WHERE staged_form_id = s.id ORDER BY id DESC LIMIT 1) AS shot
                 FROM staged_forms s JOIN jobs j ON j.id = s.job_id LEFT JOIN tailored_cvs t ON t.id = s.cv_id
-                WHERE s.state IN ('READY_TO_SUBMIT','NEEDS_USER_INPUT','MANUAL_APPLY')
-                ORDER BY CASE s.state WHEN 'READY_TO_SUBMIT' THEN 0 WHEN 'NEEDS_USER_INPUT' THEN 1 ELSE 2 END,
+                WHERE s.state IN ('READY_TO_SUBMIT','NEEDS_USER_INPUT','MANUAL_APPLY','NEEDS_LOGIN','SENT_UNCONFIRMED')
+                ORDER BY CASE s.state WHEN 'READY_TO_SUBMIT' THEN 0 WHEN 'NEEDS_USER_INPUT' THEN 1 WHEN 'SENT_UNCONFIRMED' THEN 2 WHEN 'NEEDS_LOGIN' THEN 3 ELSE 4 END,
                          j.priority_score DESC""").fetchall()
         out = []
         for r in rows:
@@ -84,6 +84,33 @@ def create_app(ws) -> FastAPI:
         finally:
             _submit_lock.release()
 
+    _bulk = {"running": False, "result": None}
+
+    @app.post("/api/submit_all")
+    def submit_all():
+        """'Send all ready': you approve every complete form at once."""
+        from ..automation import auto_submitter
+        from ..settings import load_settings
+        if _bulk["running"] or not _submit_lock.acquire(blocking=False):
+            raise HTTPException(409, "a submission is already running")
+        settings = load_settings()
+        settings["auto_submit"] = {**settings["auto_submit"], "enabled": True, "only_hosts": [""],
+                                   "max_per_day": 10_000}
+        _bulk["running"] = True
+
+        def work():
+            try:
+                _bulk["result"] = auto_submitter.run(ws, settings)
+            finally:
+                _bulk["running"] = False
+                _submit_lock.release()
+        threading.Thread(target=work, daemon=True).start()
+        return {"ok": True, "started": True}
+
+    @app.get("/api/submit_all")
+    def submit_all_status():
+        return _bulk
+
     def _set(sid: int, form_state: str, job_status: str, reason: str):
         with db.session(ws.db_path) as c:
             r = c.execute("SELECT job_id FROM staged_forms WHERE id = ?", (sid,)).fetchone()
@@ -101,6 +128,26 @@ def create_app(ws) -> FastAPI:
     @app.post("/api/applied_myself/{sid}")
     def applied_myself(sid: int):
         return _set(sid, "SUBMITTED", "SUBMITTED", "you applied yourself")
+
+    @app.get("/api/emails")
+    def emails():
+        with db.session(ws.db_path) as c:
+            return [dict(r) for r in c.execute(
+                "SELECT id, from_addr, from_name, subject, received_at, body_text, category, draft_reply, state, sent_at "
+                "FROM recruiter_emails WHERE state != 'DISMISSED' ORDER BY state = 'SENT', received_at DESC LIMIT 200")]
+
+    @app.post("/api/emails/{eid}/send")
+    def send_email(eid: int, payload: dict = Body(...)):
+        """Sends your reply. Only this button sends email; nothing is sent automatically."""
+        from ..email_agent.recruiter_replies import send
+        with db.session(ws.db_path) as c:
+            return send(c, eid, payload.get("body") or "")
+
+    @app.post("/api/emails/{eid}/dismiss")
+    def dismiss_email(eid: int):
+        with db.session(ws.db_path) as c:
+            c.execute("UPDATE recruiter_emails SET state = 'DISMISSED' WHERE id = ?", (eid,))
+        return {"ok": True}
 
     @app.get("/api/platforms")
     def platforms():

@@ -1,6 +1,7 @@
 """Job Sprint Agent: main entry point.
 
-  python run_sprint.py              daily sprint (for now: setup + checks + sample CVs)
+  python run_sprint.py              daily sprint: inbox + job search, fill forms, send the complete
+                                    ones (see config/agent_settings.yaml), then open the review page
   python run_sprint.py --setup      create the Desktop folder and database only
   python run_sprint.py --check      check your profile and settings
   python run_sprint.py --sample-cvs build one sample CV per track to review the layout
@@ -11,8 +12,9 @@
   python run_sprint.py --stage-only   fill forms for the top qualified jobs (stops before Submit)
   python run_sprint.py --review       open the review page at http://127.0.0.1:8000
   python run_sprint.py --stage-limit N  stage at most N jobs this run
-
-Coming in step 4: --email-only.
+  python run_sprint.py --send-ready   send the complete applications now (same rules as the daily run)
+  python run_sprint.py --email-only   read the inbox: job alerts into the list, recruiter replies drafted
+  python run_sprint.py --no-send      daily sprint without sending anything this time
 """
 from __future__ import annotations
 
@@ -29,9 +31,7 @@ sys.path.insert(0, str(ROOT))
 from src import database as db  # noqa: E402
 from src.workspace import ensure_workspace  # noqa: E402
 
-PLANNED = {
-    "email_only": "Inbox scanning and recruiter replies arrive in step 4 of the plan.",
-}
+PLANNED: dict[str, str] = {}
 
 
 def _load_env() -> None:
@@ -116,7 +116,17 @@ def discover(ws, log) -> int:
         run_id = db.start_run(conn, "discover")
     result = pipeline.run(ws, run_id)
     with db.session(ws.db_path) as conn:
-        db.finish_run(conn, run_id, jobs_found=result["found"], jobs_kept=result["kept"])
+        db.finish_run(conn, run_id, jobs_found=result["found"], jobs_kept=result["kept"], emails_found=result.get("emails", 0))
+    return 0
+
+
+def email_only(ws, log) -> int:
+    from src.discovery import pipeline
+    with db.session(ws.db_path) as conn:
+        run_id = db.start_run(conn, "email")
+    result = pipeline.run(ws, run_id, sources=("email",))
+    with db.session(ws.db_path) as conn:
+        db.finish_run(conn, run_id, jobs_found=result["found"], jobs_kept=result["kept"], emails_found=result["emails"])
     return 0
 
 
@@ -151,6 +161,8 @@ def main(argv=None) -> int:
     ap.add_argument("--no-review", action="store_true", help="don't open the review page at the end")
     ap.add_argument("--login-setup", action="store_true")
     ap.add_argument("--email-only", action="store_true")
+    ap.add_argument("--send-ready", action="store_true", help="send complete applications now")
+    ap.add_argument("--no-send", action="store_true", help="don't send anything this run")
     args = ap.parse_args(argv)
     _load_env()
 
@@ -196,6 +208,12 @@ def main(argv=None) -> int:
     if args.stage_only:
         stage(ws, log, args.stage_limit)
         return 0
+    if args.send_ready:
+        from src.automation import auto_submitter
+        auto_submitter.run(ws)
+        return 0
+    if args.email_only:
+        return email_only(ws, log)
     if args.review:
         from src.web.server import serve
         serve(ws)
@@ -207,6 +225,9 @@ def main(argv=None) -> int:
         return 1
     discover(ws, log)
     stage(ws, log, args.stage_limit)
+    if not args.no_send:
+        from src.automation import auto_submitter
+        auto_submitter.run(ws)
     if not args.no_review:
         from src.web.server import serve
         serve(ws)

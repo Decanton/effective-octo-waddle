@@ -1,4 +1,5 @@
-"""Submits a staged application. Runs ONLY when you press Submit on the review page.
+"""Submits a staged application: when you press Submit on the review page, or
+automatically within the limits in config/agent_settings.yaml (see auto_submitter.py).
 
 It reopens the form, fills it again from the saved answers plus anything you
 typed on the review page, ticks only the consent boxes you ticked, presses
@@ -85,8 +86,10 @@ def submit(ws, staged_id: int, overrides: dict | None = None, consents: list[str
             conn.execute("UPDATE staged_forms SET state = 'SUBMITTED', submitted_at = ? WHERE id = ?", (db.now_iso(), staged_id))
             db.set_job_status(conn, row["job_id"], "SUBMITTED")
         else:
-            conn.execute("UPDATE staged_forms SET error = ? WHERE id = ?",
-                         ("Pressed Submit but saw no confirmation. Check the screenshot.", staged_id))
+            # It was very likely sent, so never send it again; flag it for you to check.
+            conn.execute("UPDATE staged_forms SET state = 'SENT_UNCONFIRMED', submitted_at = ?, error = ? WHERE id = ?",
+                         (db.now_iso(), "Pressed Submit but saw no thank-you page. Check the screenshot.", staged_id))
+            db.set_job_status(conn, row["job_id"], "SUBMITTED", "pressed Submit; no confirmation page seen")
         conn.execute("INSERT INTO screenshots(staged_form_id, path, kind, created_at) VALUES (?,?,?,?)",
                      (staged_id, str(shot), "after_submit", db.now_iso()))
     return {"ok": confirmed, "screenshot": str(shot),

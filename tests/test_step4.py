@@ -1,0 +1,164 @@
+"""Step 4: inbox reading, recruiter drafts, automatic sending rules, sign-in tracking."""
+import json
+import os
+from email.message import EmailMessage
+from pathlib import Path
+
+import pytest
+
+from src import database as db
+from src.automation import auto_submitter
+from src.email_agent import imap_scanner, recruiter_replies
+from src.settings import load_settings
+from src.workspace import ensure_workspace
+from tests.test_step3 import FIX, _browser_ok
+
+PROFILE = {"personal": {"full_name": "Dickens Owuor Owino", "email": "d@example.com"}, "summaries": {}, "screening_answers": {}}
+
+
+def _raw(frm, subject, html=None, text=None, date="Thu, 19 Nov 2026 08:00:00 +0000"):
+    m = EmailMessage()
+    m["From"], m["To"], m["Subject"], m["Date"], m["Message-ID"] = frm, "me@example.com", subject, date, f"<{subject[:5]}@x>"
+    m.set_content(text or "plain")
+    if html:
+        m.add_alternative(html, subtype="html")
+    return m.as_bytes()
+
+
+def _now():
+    from datetime import datetime, timezone
+    return datetime(2026, 11, 19, 10, 0, tzinfo=timezone.utc)
+
+
+def test_linkedin_alert_becomes_jobs():
+    html = """<a href="https://www.linkedin.com/comm/jobs/view/4012345678/?trackingId=abc">AI Data Specialist</a>
+              <a href="https://www.linkedin.com/comm/jobs/view/4012345678/?x=1">View job</a>
+              <a href="https://click.example.com/r?url=https%3A%2F%2Fjobs.lever.co%2Facme%2Fabc-123">Backend Engineer</a>
+              <a href="https://www.linkedin.com/settings">Settings</a>"""
+    m = imap_scanner.parse_message(_raw("LinkedIn Job Alerts <jobalerts-noreply@linkedin.com>",
+                                        "\"data analyst\": 12 new jobs in Kenya", html), now=_now())
+    assert imap_scanner.is_job_alert(m) and not imap_scanner.is_recruiter(m)
+    jobs = imap_scanner.alert_jobs(m)
+    urls = {j["url"]: j for j in jobs}
+    assert set(urls) == {"https://www.linkedin.com/jobs/view/4012345678", "https://jobs.lever.co/acme/abc-123"}
+    assert urls["https://www.linkedin.com/jobs/view/4012345678"]["title"] == "AI Data Specialist"
+    assert all(j["age_hours"] == pytest.approx(2.0) and j["source"].startswith("email:") for j in jobs)
+
+
+def test_recruiter_detection_and_categories():
+    m = imap_scanner.parse_message(_raw("Jane Recruiter <jane@acme.com>", "Interview for the Data Engineer role",
+                                        text="Hi Dickens, could you share your availability for an interview this week?"), now=_now())
+    assert imap_scanner.is_recruiter(m, "me@example.com") and imap_scanner.category(m) == "interview_request"
+    news = imap_scanner.parse_message(_raw("Medium Digest <noreply@medium.com>", "Hiring trends in 2026"), now=_now())
+    assert not imap_scanner.is_recruiter(news)
+
+
+def test_draft_and_send_only_on_request(tmp_path, monkeypatch):
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    monkeypatch.setattr(recruiter_replies.llm_client, "available", lambda: False)
+    m = {"message_id": "<1@x>", "from_addr": "jane@acme.com", "from_name": "Jane Doe", "subject": "Interview",
+         "text": "When are you free?", "category": "interview_request", "received_at": "2026-11-19T08:00:00+00:00"}
+    with db.session(ws.db_path) as c:
+        assert recruiter_replies.save(c, [m], PROFILE) == 1
+        assert recruiter_replies.save(c, [m], PROFILE) == 0  # no duplicates
+        row = c.execute("SELECT * FROM recruiter_emails").fetchone()
+        assert row["state"] == "DRAFTED" and "Hi Jane" in row["draft_reply"] and "[FILL IN" in row["draft_reply"]
+        # A draft with a gap is refused; nothing is sent.
+        monkeypatch.setenv("EMAIL_ADDRESS", "me@example.com")
+        monkeypatch.setenv("EMAIL_APP_PASSWORD", "abcd efgh")
+        assert not recruiter_replies.send(c, row["id"], row["draft_reply"])["ok"]
+        sent = []
+
+        class FakeSMTP:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def login(self, u, p): assert p == "abcdefgh"
+            def send_message(self, msg): sent.append(msg)
+        res = recruiter_replies.send(c, row["id"], "Hi Jane, Tuesday 10am EAT works. Dickens", smtp_factory=FakeSMTP)
+        assert res["ok"] and sent[0]["To"] == "jane@acme.com" and sent[0]["In-Reply-To"] == "<1@x>"
+        assert sent[0]["Subject"] == "Re: Interview"
+        assert not recruiter_replies.send(c, row["id"], "again", smtp_factory=FakeSMTP)["ok"]  # never twice
+
+
+def _staged(c, url, state="READY_TO_SUBMIT", answers=(), error=None, prio=0.5):
+    jid = db.upsert_job(c, {"url": url + "#job", "source": "greenhouse:x", "title": "Data Engineer", "company": "Acme",
+                            "status": state, "age_hours": 2, "priority_score": prio})
+    cur = c.execute("INSERT INTO staged_forms(job_id, form_url, answers_json, state, error, created_at) VALUES (?,?,?,?,?,?)",
+                    (jid, url, json.dumps(list(answers)), state, error, db.now_iso()))
+    return cur.lastrowid
+
+
+def test_auto_send_rules_and_daily_cap(tmp_path):
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    consent = {"label": "I agree to the privacy policy", "consent": True, "required": True}
+    with db.session(ws.db_path) as c:
+        ok1 = _staged(c, "https://boards.greenhouse.io/acme/jobs/1", prio=0.9)
+        ok2 = _staged(c, "https://jobs.lever.co/acme/2/apply", prio=0.8)
+        ok3 = _staged(c, "https://jobs.ashbyhq.com/acme/3/application", prio=0.7)
+        other = _staged(c, "https://careers.example.com/apply/4")
+        cap = _staged(c, "https://boards.greenhouse.io/acme/jobs/5", error="CAPTCHA on this form: you'll solve it")
+        cons = _staged(c, "https://boards.greenhouse.io/acme/jobs/6", answers=[consent])
+        needs = _staged(c, "https://boards.greenhouse.io/acme/jobs/7", state="NEEDS_USER_INPUT")
+    calls = []
+
+    def fake_submit(ws_, sid, overrides, consents, confirm_wait_ms):
+        calls.append((sid, consents))
+        with db.session(ws_.db_path) as c:
+            c.execute("UPDATE staged_forms SET state='SUBMITTED', submitted_at=? WHERE id=?", (db.now_iso(), sid))
+        return {"ok": True}
+
+    s = load_settings()
+    s["auto_submit"].update(enabled=True, max_per_day=2, accept_required_consents=False)
+    counts = auto_submitter.run(ws, s, submit_fn=fake_submit)
+    assert [c[0] for c in calls] == [ok1, ok2] and counts["sent"] == 2  # best first, capped at 2
+    assert counts["waiting_for_you"] >= 4
+    calls.clear()
+    assert auto_submitter.run(ws, s, submit_fn=fake_submit)["sent"] == 0 and not calls  # cap holds for the day
+    # Consent forms go only when you allow it; other sites, CAPTCHAs and incomplete forms never auto-send.
+    s["auto_submit"].update(max_per_day=50, accept_required_consents=True)
+    auto_submitter.run(ws, s, submit_fn=fake_submit)
+    assert {c[0] for c in calls} == {ok3, cons} and dict(calls)[cons] == ["I agree to the privacy policy"]
+    s["auto_submit"]["enabled"] = False
+    calls.clear()
+    assert auto_submitter.run(ws, s, submit_fn=fake_submit)["sent"] == 0 and not calls
+    assert {other, cap, needs}  # untouched
+
+
+def test_settings_defaults(tmp_path):
+    s = load_settings(tmp_path / "missing.yaml")
+    assert s["auto_submit"]["enabled"] is False and s["email"]["lookback_hours"] == 24
+    real = load_settings()
+    assert real["auto_submit"]["max_per_day"] >= 1 and "greenhouse.io" in real["auto_submit"]["only_hosts"]
+
+
+def test_missing_boards_are_summarised(monkeypatch):
+    from src.discovery import ats_api_fetcher as ats
+
+    class R:
+        def __init__(self, code, data=None): self.status_code, self._d = code, data
+        def json(self): return self._d
+
+    def fake_get(self, url, timeout):
+        return R(404) if "nope" in url else R(200, {"jobs": []})
+    monkeypatch.setattr(ats.requests.Session, "get", fake_get)
+    cfg = {"ats_boards": [{"name": "A", "kind": "greenhouse", "board": "ok"}, {"name": "B", "kind": "ashby", "board": "nope"}]}
+    assert ats.fetch(cfg) == []
+
+
+@pytest.mark.skipif(not _browser_ok(), reason="Playwright browser not installed")
+def test_signup_page_is_tracked_as_needs_login(tmp_path, monkeypatch):
+    from src.automation import browser_manager, form_stager
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    url = (FIX / "signup.html").as_uri()
+    with db.session(ws.db_path) as c:
+        db.upsert_job(c, {"url": url, "source": "himalayas", "title": "Data Engineer", "company": "Acme",
+                          "description": "Python SQL", "status": "QUALIFIED", "age_hours": 2, "priority_score": 0.9})
+    monkeypatch.setattr(form_stager, "application_url", lambda job: url)
+    assert form_stager.run(ws, limit=1) == {"NEEDS_LOGIN": 1}
+    with db.session(ws.db_path) as c:
+        assert c.execute("SELECT state FROM staged_forms").fetchone()[0] == "NEEDS_LOGIN"
+    assert any(u == url for _, u in browser_manager.pages_to_sign_in(ws))

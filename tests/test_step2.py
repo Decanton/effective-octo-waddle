@@ -116,8 +116,10 @@ def test_pipeline_saves_and_exports(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline.ats_api_fetcher, "fetch", lambda cfg: [_job(title="AI Trainer", url="g1")])
     monkeypatch.setattr(pipeline.jobspy_fetcher, "fetch", lambda cfg: [_job(title="Old", age_hours=50, url="l1")])
     monkeypatch.setattr(pipeline.remote_boards, "fetch", lambda boards: [])
+    from src.email_agent import imap_scanner
+    monkeypatch.setattr(imap_scanner, "fetch", lambda hours: ([], []))
     res = pipeline.run(ws)
-    assert res == {"found": 2, "kept": 1, "export": res["export"]}
+    assert res == {"found": 2, "kept": 1, "export": res["export"], "emails": 0}
     with db.session(ws.db_path) as c:
         assert db.count_by_status(c) == {"QUALIFIED": 1, "REJECTED_STALE": 1}
         assert c.execute("SELECT COUNT(*) FROM platforms").fetchone()[0] >= 5
