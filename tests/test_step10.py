@@ -201,3 +201,24 @@ def test_accommodation_inbox_refused_at_send_time(tmp_path):
     assert blocked_recipient("reasonableaccommodations@airbnb.com")
     assert blocked_recipient("jobs@brightermonday.co.ke")
     assert blocked_recipient("hr@acme.co.ke") is None
+
+
+def test_linkedin_signed_in_search_cards(tmp_path, monkeypatch):
+    import pytest
+    from tests.test_step4 import FIX, _browser_ok
+    if not _browser_ok():
+        pytest.skip("no browser")
+    from src.automation.browser_manager import browser
+    from src.discovery import linkedin_browser as lb
+    from src.workspace import ensure_workspace
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    assert "f_AL=true" in lb.search_url("ai trainer", lb.KENYA_GEO, False) and "f_WT=2" in lb.search_url("x", lb.WORLDWIDE_GEO, True)
+    assert lb._plain_term('"a" OR "b" OR "c" OR "d"') == '"a" OR "b" OR "c"'
+    with browser(ensure_workspace(tmp_path / "JobSprintAgent")) as ctx:
+        page = ctx.new_page()
+        page.goto((FIX / "linkedin_search.html").as_uri())
+        cs = lb.cards(page)
+    first = next(c for c in cs if c["id"] == "4123456789")
+    assert first["title"] == "AI Data Specialist" and first["company"] == "RWS" and first["posted"] == "2026-11-19"
+    assert next(c for c in cs if c["id"] == "4123456790")["applied"]
+    assert lb.fetch(None, {}, {}) == []  # a hidden browser never searches LinkedIn

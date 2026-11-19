@@ -14,7 +14,6 @@ log = logging.getLogger("jobsprint")
 LOGIN_PAGES = [
     ("LinkedIn", "https://www.linkedin.com/login"),
     ("Himalayas", "https://himalayas.app/login"),
-    ("We Work Remotely", "https://weworkremotely.com/job-seekers/account/login"),
     ("Jobicy", "https://jobicy.com/"),
     ("Wellfound", "https://wellfound.com/login"),
     ("AfterQuery", "https://experts.afterquery.com/apply"),

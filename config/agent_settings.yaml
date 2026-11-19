@@ -131,6 +131,14 @@ follow_ups:
   auto_send: true
   max_per_day: 10
 
+linkedin_search:
+  # Search LinkedIn signed in, in Job Agent Chrome (the anonymous search gets blocked after a few
+  # requests). Easy Apply jobs from the last 48 hours, Kenya and remote worldwide, for each search
+  # in search_queries.yaml; then read the full post of up to max_details of them. Human-paced.
+  enabled: true
+  pages_per_search: 1
+  max_details: 60
+
 linkedin_easy_apply:
   # Apply through LinkedIn while signed in to LinkedIn in Job Agent Chrome (Kelly turned this on
   # 2026-11-19, accepting that LinkedIn may restrict accounts it thinks are automated).

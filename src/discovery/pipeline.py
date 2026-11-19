@@ -28,7 +28,7 @@ def repost_of(conn, job: dict) -> bool:
     return False
 
 
-def run(ws, run_id: int | None = None, sources=("email", "jobspy", "ats", "remote", "more")) -> dict:
+def run(ws, run_id: int | None = None, sources=("email", "linkedin_browser", "jobspy", "ats", "remote", "more")) -> dict:
     profile = load_profile()
     search_cfg = load_yaml("search_queries.yaml")
     platform_cfg = load_yaml("ai_platforms.yaml")
@@ -43,6 +43,13 @@ def run(ws, run_id: int | None = None, sources=("email", "jobspy", "ats", "remot
             # Alert emails carry only a title and link; read LinkedIn's public page for the rest.
             pause = float(search_cfg.get("jobspy", {}).get("request_pause_seconds", 2.0))
             raw += jobspy_fetcher.enrich_linkedin(mail_jobs, 40, min(pause, 3.0))
+    if "linkedin_browser" in sources:  # signed-in LinkedIn search in Job Agent Chrome (Easy Apply, last 48h)
+        from ..settings import load_settings
+        try:
+            from . import linkedin_browser
+            raw += linkedin_browser.fetch(ws, search_cfg, load_settings().get("linkedin_search") or {})
+        except Exception as exc:
+            log.warning("LinkedIn search in Job Agent Chrome failed: %s", exc)
     if "ats" in sources:
         raw += ats_api_fetcher.fetch(platform_cfg)
     if "remote" in sources:
