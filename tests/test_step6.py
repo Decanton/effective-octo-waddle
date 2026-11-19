@@ -216,3 +216,30 @@ def test_front_door_swaps_versions_without_dropping_requests(tmp_path):
     finally:
         srv.shutdown()
         door.current.stop(grace=0)
+
+
+def test_never_replies_to_mailers(tmp_path):
+    from src.email_agent import recruiter_replies as rr
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    sent = []
+
+    class S:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def starttls(self, *a, **k): pass
+        def login(self, *a): pass
+        def send_message(self, m): sent.append(m["To"])
+    assert rr.machine_sender("support@micro1.ai", "Your Software Engineer Application is Moving Forward – Complete Your Interview")
+    assert rr.machine_sender("team@hashlist.com") and rr.machine_sender("applyonline@dice.com")
+    assert not rr.machine_sender("jane.doe@acme.com", "Interview for Data Analyst role")
+    with db.session(ws.db_path) as c:
+        cols = {r[1] for r in c.execute("PRAGMA table_info(recruiter_emails)")}
+        base = {"message_id": "m1", "from_addr": "support@micro1.ai", "subject": "Complete Your Interview", "received_at": db.now_iso(),
+                "draft_reply": "Thanks!", "state": "DRAFTED", "created_at": db.now_iso(), "category": "interview"}
+        row = {k: v for k, v in base.items() if k in cols}
+        c.execute(f"INSERT INTO recruiter_emails({','.join(row)}) VALUES ({','.join('?' * len(row))})", list(row.values()))
+        out = rr.auto_send(c, {"auto_send": True, "max_per_day": 10}, smtp_factory=S)
+        assert out["sent"] == 0 and not sent
+        assert c.execute("SELECT state FROM recruiter_emails").fetchone()[0] == "DISMISSED"

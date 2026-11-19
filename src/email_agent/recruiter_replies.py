@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import smtplib
 from email.message import EmailMessage
 from email.utils import make_msgid
@@ -77,6 +78,19 @@ def save(conn, messages: list[dict], profile: dict) -> int:
     return added
 
 
+INTERVIEW_PLATFORM = re.compile(r"complete your (ai )?interview|moving forward.{0,40}complete|take (the|your) assessment|"
+                                r"your (application|profile) (is|has been) (moving|reviewed)|start your (interview|assessment)", re.I)
+
+
+def machine_sender(from_addr: str, subject: str = "") -> bool:
+    """A job site's or platform's automatic mailer, not a person. Never answered."""
+    from .imap_scanner import ALERT_SENDERS, AUTOMATED, PLATFORM_SUBJECT
+    addr = (from_addr or "").lower()
+    local, _, domain = addr.partition("@")
+    return bool(AUTOMATED.search(addr) or AUTOMATED.search(local) or any(d in domain for d in ALERT_SENDERS)
+                or PLATFORM_SUBJECT.search(subject or "") or INTERVIEW_PLATFORM.search(subject or ""))
+
+
 def auto_send(conn, cfg: dict, smtp_factory=None) -> dict:
     """Send complete drafts, within the daily cap. Drafts with [FILL IN ...] gaps wait for you."""
     out = {"sent": 0, "waiting": 0}
@@ -93,6 +107,10 @@ def auto_send(conn, cfg: dict, smtp_factory=None) -> dict:
         replied = conn.execute("SELECT 1 FROM recruiter_emails WHERE state = 'SENT' AND id != ? AND (from_addr = ? "
                                "OR (thread_id IS NOT NULL AND thread_id = ?)) AND substr(sent_at, 1, 10) = ?",
                                (row["id"], row["from_addr"], row["thread_id"], today)).fetchone()
+        if machine_sender(row["from_addr"], row["subject"]):
+            conn.execute("UPDATE recruiter_emails SET state = 'DISMISSED' WHERE id = ?", (row["id"],))
+            log.info("Not replying to %s (%s): an automatic mailer.", row["from_addr"], row["subject"])
+            continue
         if row["from_addr"] == own or replied:
             out["waiting"] += 1  # already answered this person today; you decide on a second reply
             continue
@@ -121,6 +139,8 @@ def send(conn, email_id: int, body: str, smtp_factory=None) -> dict:
         return {"ok": False, "error": "already sent"}
     if "[FILL IN" in body:
         return {"ok": False, "error": "the reply still has a [FILL IN ...] gap"}
+    if machine_sender(row["from_addr"], row["subject"]):
+        return {"ok": False, "error": f"{row['from_addr']} is an automatic mailer; replies there go nowhere. Nothing was sent."}
     addr, pw = os.environ.get("EMAIL_ADDRESS"), os.environ.get("EMAIL_APP_PASSWORD")
     if not (addr and pw):
         return {"ok": False, "error": "EMAIL_ADDRESS / EMAIL_APP_PASSWORD missing in .env"}
