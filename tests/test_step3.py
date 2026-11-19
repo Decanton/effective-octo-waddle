@@ -99,7 +99,11 @@ def test_stage_stops_before_submit_then_submit_after_approval(tmp_path, monkeypa
 
 
 def test_review_api(tmp_path):
-    from fastapi.testclient import TestClient
+    try:
+        from fastapi.testclient import TestClient
+        TestClient  # noqa: B018
+    except Exception:
+        pytest.skip("test client dependency not installed")
     from src.web.server import create_app
     ws = ensure_workspace(tmp_path / "JobSprintAgent")
     db.init_db(ws.db_path)
@@ -113,3 +117,16 @@ def test_review_api(tmp_path):
     assert client.post(f"/api/skip/{items[0]['id']}").json()["ok"]
     assert client.get("/api/staged").json() == []
     assert client.get("/files/screenshot/999").status_code == 404
+
+
+@pytest.mark.skipif(not _browser_ok(), reason="Playwright browser not installed")
+def test_follows_listing_apply_link_to_form(tmp_path, monkeypatch):
+    from src.automation import form_stager
+    from src.automation.browser_manager import browser
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    listing = (FIX / "listing.html").as_uri()
+    with browser(ws) as ctx:
+        page = ctx.new_page()
+        url = form_stager._follow_to_ats(page, {"url": listing})
+    assert url and url.endswith("apply_form.html")

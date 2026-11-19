@@ -146,6 +146,7 @@ def main(argv=None) -> int:
     ap.add_argument("--mark-applied", metavar="PLATFORM")
     ap.add_argument("--stage-only", action="store_true")
     ap.add_argument("--stage-limit", type=int)
+    ap.add_argument("--restage", action="store_true", help="retry jobs that ended as MANUAL_APPLY, FAILED or NEEDS_LOGIN")
     ap.add_argument("--review", action="store_true")
     ap.add_argument("--no-review", action="store_true", help="don't open the review page at the end")
     ap.add_argument("--login-setup", action="store_true")
@@ -183,6 +184,15 @@ def main(argv=None) -> int:
         from src.automation.browser_manager import login_setup
         login_setup(ws)
         return 0
+    if args.restage:
+        with db.session(ws.db_path) as conn:
+            ids = [r[0] for r in conn.execute("SELECT id FROM jobs WHERE status IN ('MANUAL_APPLY','FAILED','NEEDS_LOGIN')")]
+            for jid in ids:
+                conn.execute("DELETE FROM staged_forms WHERE job_id = ?", (jid,))
+                db.set_job_status(conn, jid, "QUALIFIED", "queued again for staging")
+        log.info("Queued %d jobs to be staged again.", len(ids))
+        if not args.stage_only:
+            return 0
     if args.stage_only:
         stage(ws, log, args.stage_limit)
         return 0

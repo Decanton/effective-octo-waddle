@@ -44,26 +44,82 @@ def application_url(job: dict) -> str | None:
     return None
 
 
-def _follow_to_ats(page, job: dict) -> str | None:
-    """Open a job-board page and look for a link to a supported application form."""
+APPLY_TEXT = re.compile(r"\bapply\b|application", re.I)
+
+
+def _has_form(page) -> bool:
+    """True when the page shows a real application form (not just a search box)."""
     try:
-        page.goto(job.get("apply_url") or job["url"], wait_until="domcontentloaded")
-        page.wait_for_timeout(1500)
+        inputs = page.locator("form input:visible, form textarea:visible, form select:visible").count()
+        key = page.locator("input[type=email], input[type=file], input[name*=email i], input[id*=email i]").count()
+        return inputs >= 3 and key > 0
+    except Exception:
+        return False
+
+
+def _ats_url(href: str) -> str:
+    fake = {"source": "", "apply_url": href, "url": href}
+    if "lever.co" in href:
+        fake["source"] = "lever:"
+    elif "ashbyhq.com" in href:
+        fake["source"] = "ashby:"
+        fake["url"] = re.sub(r"/application/?$", "", href)
+    return application_url(fake) or href
+
+
+def _candidate_links(page) -> list[str]:
+    ats, apply = [], []
+    for a in page.locator("a[href]").all()[:500]:
+        try:
+            href = a.get_attribute("href") or ""
+            text = (a.inner_text(timeout=500) or "") + " " + (a.get_attribute("aria-label") or "")
+        except Exception:
+            continue
+        if not href or href.startswith(("#", "mailto:", "javascript:")):
+            continue
+        href = page.evaluate("h => new URL(h, location.href).href", href)
+        if any(h in href for h in ATS_HOSTS):
+            ats.append(href)
+        elif APPLY_TEXT.search(text):
+            apply.append(href)
+    seen, out = set(), []
+    for h in ats + apply:
+        if h not in seen:
+            seen.add(h)
+            out.append(h)
+    return out[:4]
+
+
+def _follow_to_ats(page, job: dict, depth: int = 2) -> str | None:
+    """Follow a job-board listing through its Apply link to the company's real form."""
+    start = job.get("apply_url") or job["url"]
+    try:
+        page.goto(start, wait_until="domcontentloaded")
+        page.wait_for_timeout(2000)
     except Exception:
         return None
-    if any(h in urlparse(page.url).netloc for h in ATS_HOSTS):
-        return page.url
-    for a in page.locator("a[href]").all()[:400]:
-        href = a.get_attribute("href") or ""
-        if any(h in href for h in ATS_HOSTS):
-            fake = {"source": "", "apply_url": href, "url": href}
-            if "lever.co" in href:
-                fake["source"] = "lever:"
-            elif "ashbyhq.com" in href:
-                fake["source"] = "ashby:"
-                fake["url"] = re.sub(r"/application/?$", "", href)
-            return application_url(fake) or href
-    return None
+    for _ in range(depth + 1):
+        here = page.url
+        if any(h in urlparse(here).netloc for h in ATS_HOSTS):
+            target = _ats_url(here)
+            return target
+        if _has_form(page):
+            return here
+        links = _candidate_links(page)
+        if not links:
+            return None
+        moved = False
+        for href in links:
+            try:
+                page.goto(href, wait_until="domcontentloaded")
+                page.wait_for_timeout(2000)
+                moved = True
+                break
+            except Exception:
+                continue
+        if not moved:
+            return None
+    return page.url if _has_form(page) else None
 
 
 def _safe(s: str) -> str:
