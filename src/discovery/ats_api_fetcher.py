@@ -70,6 +70,12 @@ PARSERS = {"greenhouse": parse_greenhouse, "lever": parse_lever, "ashby": parse_
 
 
 def _fetch_board(sess, b: dict, timeout: float) -> tuple[list[dict], str | None]:
+    if b.get("kind", "auto") == "auto":  # not sure which system the company uses: try each
+        for kind in PARSERS:
+            found, miss = _fetch_board(sess, {**b, "kind": kind}, timeout)
+            if not miss:
+                return found, None
+        return [], f"{b.get('name', b['board'])} (auto:{b['board']})"
     kind, board, name = b["kind"], b["board"], b.get("name", b["board"])
     try:
         r = sess.get(URLS[kind].format(board=board), timeout=timeout)

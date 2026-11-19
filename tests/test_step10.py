@@ -222,3 +222,23 @@ def test_linkedin_signed_in_search_cards(tmp_path, monkeypatch):
     assert first["title"] == "AI Data Specialist" and first["company"] == "RWS" and first["posted"] == "2026-11-19"
     assert next(c for c in cs if c["id"] == "4123456790")["applied"]
     assert lb.fetch(None, {}, {}) == []  # a hidden browser never searches LinkedIn
+
+
+def test_ats_board_auto_kind_tries_each_system():
+    from src.discovery import ats_api_fetcher as f
+
+    class R:
+        def __init__(self, code, data=None):
+            self.status_code, self._d = code, data
+        def json(self):
+            return self._d
+
+    class S:
+        def get(self, url, timeout=None):
+            return R(200, {"jobs": []}) if "ashbyhq" in url else R(404)
+    found, miss = f._fetch_board(S(), {"kind": "auto", "board": "acme", "name": "Acme"}, 5)
+    assert found == [] and miss is None
+    class N:
+        def get(self, url, timeout=None):
+            return R(404)
+    assert f._fetch_board(N(), {"kind": "auto", "board": "nope"}, 5)[1] == "nope (auto:nope)"
