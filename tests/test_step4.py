@@ -484,6 +484,6 @@ def test_daily_run_refuses_to_start_twice(tmp_path, monkeypatch):
     ws = ensure_workspace(tmp_path / "JobSprintAgent")
     monkeypatch.setattr(run_sprint, "setup", lambda: ws)
     db.init_db(ws.db_path)
-    (ws.data / "sprint.lock").write_text("123")
+    (ws.data / "sprint.lock").write_text(str(__import__("os").getpid()))  # a live process holds it
     assert run_sprint.main(["--no-review"]) == 1
     assert (ws.data / "sprint.lock").exists()  # the other run's lock is left alone

@@ -143,7 +143,7 @@ def test_updates_from_github_keeping_env_and_backing_up(tmp_path):
     assert (app / "run_sprint.py").read_text() == "v2" and (app / ".env").read_text() == "EMAIL_PASSWORD=secret"
     assert (app / "_backups" / "old" / "run_sprint.py").read_text() == "v1" and not (app / "_backups" / "old" / ".env").exists()
     assert updater.check_and_update(ws, app_dir=app, cfg=cfg)["updated"] is False  # already current
-    (ws.data / "sprint.lock").write_text("1")
+    (ws.data / "sprint.lock").write_text(str(__import__("os").getpid()))  # a live process holds it
     (origin / "run_sprint.py").write_text("v3")
     _git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "v3", cwd=origin)
     assert "in progress" in updater.check_and_update(ws, app_dir=app, cfg=cfg)["error"]
