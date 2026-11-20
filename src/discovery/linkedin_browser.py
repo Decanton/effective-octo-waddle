@@ -152,7 +152,9 @@ def fetch(ws, search_cfg: dict, cfg: dict) -> list[dict]:
     hours = int(search_cfg.get("max_age_hours", 48))
     max_pages, max_details = int(cfg.get("pages_per_search", 1)), int(cfg.get("max_details", 60))
     found: dict[str, dict] = {}
-    slow, use_list = 0, False
+    # LinkedIn's new search page (/jobs/search-results/) has no readable job cards and its semantic
+    # search ignores most filters, so by default the agent reads LinkedIn's results list directly.
+    slow, use_list = 0, bool(cfg.get("use_results_list", True))
     with browser(ws) as ctx:
         page = ctx.new_page()
         try:

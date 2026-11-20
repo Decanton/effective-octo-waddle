@@ -138,6 +138,8 @@ linkedin_search:
   enabled: true
   pages_per_search: 3
   max_details: 120
+  # LinkedIn's new search page has no readable job cards, so read its results list directly.
+  use_results_list: true
 
 linkedin_easy_apply:
   # Apply through LinkedIn while signed in to LinkedIn in Job Agent Chrome (Kelly turned this on
