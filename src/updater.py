@@ -150,7 +150,8 @@ def check_and_update(ws, app_dir: Path = APP_DIR, cfg: dict | None = None, force
         return {**res, "error": "updates are off in config/agent_settings.yaml"}
     if _state["busy"]:
         return {**res, "error": "an update is already running"}
-    if (ws.data / "sprint.lock").exists():
+    from . import run_lock
+    if run_lock.holder(ws) is not None:  # (a lock left by a crashed run is cleared here)
         return {**res, "error": "a run is in progress; will update after it"}
     _state["busy"] = True
     try:

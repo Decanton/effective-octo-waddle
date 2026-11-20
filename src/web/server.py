@@ -62,7 +62,6 @@ def create_app(ws) -> FastAPI:
             out.append(d)
         return out
 
-    @app.get("/api/summary")
     def _review():
         from ..automation.auto_submitter import review_mode
         try:
@@ -70,6 +69,7 @@ def create_app(ws) -> FastAPI:
         except Exception:
             return False
 
+    @app.get("/api/summary")
     def summary():
         with db.session(ws.db_path) as c:
             forms = {r[0]: r[1] for r in c.execute("SELECT state, COUNT(*) FROM staged_forms GROUP BY state")}
@@ -191,7 +191,7 @@ def create_app(ws) -> FastAPI:
         finally:
             _submit_lock.release()
 
-    _bulk = {"running": False, "result": None}
+    _bulk = {"running": False, "result": None, "waiting": None}
     _task = {"proc": None, "what": None}
 
     def _task_status():
@@ -219,12 +219,13 @@ def create_app(ws) -> FastAPI:
         agent keeps applying overnight with nobody at the PC. A run lock stops two runs overlapping."""
         import logging
         import time as _t
+        from .. import run_lock
         from ..settings import load_settings
         log = logging.getLogger("jobsprint")
         _t.sleep(float((load_settings().get("schedule") or {}).get("first_after_minutes", 5)) * 60)
         while True:
             cfg = load_settings().get("schedule") or {}
-            if cfg.get("enabled") and not _task_status()["running"] and not (ws.data / "sprint.lock").exists():
+            if cfg.get("enabled") and not _task_status()["running"] and run_lock.holder(ws) is None:
                 try:
                     run_task("sprint")
                     log.info("Scheduled run started.")
@@ -250,28 +251,36 @@ def create_app(ws) -> FastAPI:
         settings["email_applications"] = {**settings["email_applications"], "enabled": True, "max_per_day": 10_000}
         _bulk["running"] = True
 
+        def waiting(h):
+            _bulk["waiting"] = f"waiting for the {h.get('what', 'run')} to finish (started {h.get('minutes', 0)} min ago)"
+
         def work():
             import os as _o
+            from .. import run_lock
             try:
-                res = auto_submitter.run(ws, settings, approved=True)
-                # LinkedIn Easy Apply jobs held back by review mode: apply to them now that you've said go.
-                with db.session(ws.db_path) as c:
-                    held = [r[0] for r in c.execute("SELECT id FROM jobs WHERE status = 'QUALIFIED' "
-                                                    "AND status_reason LIKE 'LinkedIn Easy Apply: review mode%'")]
-                if held:
-                    from ..automation import form_stager
-                    _o.environ["JOBSPRINT_APPROVED"] = "1"
-                    try:
-                        st = form_stager.run(ws, len(held), only_ids=held)
-                    finally:
-                        _o.environ.pop("JOBSPRINT_APPROVED", None)
-                    res["linkedin_sent"] = st.get("SUBMITTED", 0) + st.get("SENT_UNCONFIRMED", 0)
-                    res["sent"] += res["linkedin_sent"]
-                _bulk["result"] = res
+                # Waits for a run that is filling forms, so the two don't share the database and Chrome.
+                with run_lock.held(ws, "Send all ready", wait_minutes=60, on_wait=waiting):
+                    _bulk["waiting"] = None
+                    res = auto_submitter.run(ws, settings, approved=True)
+                    # LinkedIn Easy Apply jobs held back by review mode: apply to them now that you've said go.
+                    with db.session(ws.db_path) as c:
+                        held = [r[0] for r in c.execute("SELECT id FROM jobs WHERE status = 'QUALIFIED' "
+                                                        "AND status_reason LIKE 'LinkedIn Easy Apply: review mode%'")]
+                    if held:
+                        from ..automation import form_stager
+                        _o.environ["JOBSPRINT_APPROVED"] = "1"
+                        try:
+                            st = form_stager.run(ws, len(held), only_ids=held)
+                        finally:
+                            _o.environ.pop("JOBSPRINT_APPROVED", None)
+                        res["linkedin_sent"] = st.get("SUBMITTED", 0) + st.get("SENT_UNCONFIRMED", 0)
+                        res["sent"] += res["linkedin_sent"]
+                    _bulk["result"] = res
             except Exception as exc:
                 _bulk["result"] = {"sent": 0, "failed": 0, "waiting_for_you": 0, "why": [f"error: {exc}"]}
             finally:
                 _bulk["running"] = False
+                _bulk["waiting"] = None
                 _submit_lock.release()
         threading.Thread(target=work, daemon=True).start()
         return {"ok": True, "started": True}

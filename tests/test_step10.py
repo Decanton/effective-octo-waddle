@@ -389,3 +389,20 @@ def test_waits_for_a_form_that_draws_its_fields_late(tmp_path, monkeypatch):
                          '{ const i = document.createElement("input"); i.id = n; document.getElementById("f").appendChild(i); } }, 2500)</script>')
         form_stager._wait_form_ready(page)
         assert page.locator("input").count() == 4
+
+
+def test_run_lock_one_at_a_time_and_clears_dead_runs(tmp_path):
+    import pytest
+    from src import run_lock
+    from src.workspace import ensure_workspace
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    with run_lock.held(ws, "stage/send"):
+        assert run_lock.holder(ws)["what"] == "stage/send"
+        assert not run_lock.acquire(ws, "daily run")
+        with pytest.raises(RuntimeError):
+            with run_lock.held(ws, "daily run", wait_minutes=0):
+                pass
+    assert run_lock.holder(ws) is None and run_lock.acquire(ws, "x")
+    run_lock.path(ws).write_text("999999\nold run")  # a crashed run's lock
+    assert run_lock.holder(ws) is None and run_lock.acquire(ws, "new")
+    run_lock.release(ws)

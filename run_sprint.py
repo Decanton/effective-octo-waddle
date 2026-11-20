@@ -28,7 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from src import database as db  # noqa: E402
+from src import database as db, run_lock  # noqa: E402
 from src.workspace import ensure_workspace  # noqa: E402
 
 PLANNED: dict[str, str] = {}
@@ -223,7 +223,7 @@ def main(argv=None) -> int:
         log.info("Marked %s as applied.", args.mark_applied)
         return 0
     if args.discover:
-        return discover(ws, log)
+        return _locked(ws, log, "discover", lambda: discover(ws, log))
     if args.open_chrome:
         from src.automation.browser_manager import open_chrome
         open_chrome(ws)
@@ -246,23 +246,8 @@ def main(argv=None) -> int:
         from src.automation.browser_manager import login_setup
         login_setup(ws)
         return 0
-    if args.restage:
-        with db.session(ws.db_path) as conn:
-            ids = [r[0] for r in conn.execute("SELECT id FROM jobs WHERE status IN ('MANUAL_APPLY','FAILED','NEEDS_LOGIN','NEEDS_MANUAL_OTP','NEEDS_USER_INPUT')")]
-            for jid in ids:
-                conn.execute("DELETE FROM staged_forms WHERE job_id = ?", (jid,))
-                db.set_job_status(conn, jid, "QUALIFIED", "queued again for staging")
-        log.info("Queued %d jobs to be staged again.", len(ids))
-        if not args.stage_only:
-            return 0
-    if args.stage_only:  # fills forms and sends nothing, LinkedIn Easy Apply included
-        import os as _os
-        _os.environ["JOBSPRINT_NO_SUBMIT"] = "1"
-        stage(ws, log, args.stage_limit)
-        return 0
-    if args.send_ready:
-        send_all(ws, log)
-        return 0
+    if args.restage or args.stage_only or args.send_ready:
+        return _locked(ws, log, "stage/send", lambda: _stage_cmds(ws, log, args), wait_minutes=60)
     if args.email_only:
         return email_only(ws, log)
     if args.review_backend:
@@ -285,28 +270,49 @@ def main(argv=None) -> int:
         return subprocess.call([sys.executable, str(Path(__file__).resolve()), *(argv if argv is not None else sys.argv[1:]), "--no-update"])
 
     # Daily sprint: check profile, find and rank jobs, stage forms, then open the review page.
-    lock = ws.data / "sprint.lock"
     try:
-        import os as _os
-        fd = _os.open(str(lock), _os.O_CREAT | _os.O_EXCL | _os.O_WRONLY)
-        _os.write(fd, str(_os.getpid()).encode())
-        _os.close(fd)
-    except FileExistsError:
-        age_h = (datetime.now().timestamp() - lock.stat().st_mtime) / 3600
-        if age_h < 3:
-            log.error("Another run started %.0f minutes ago and is still going. Try again when it finishes.", age_h * 60)
-            return 1
-        log.warning("Removing a stale run lock from %.1f hours ago.", age_h)
-        lock.unlink(missing_ok=True)
-        return main(argv)
-    try:
-        rc = _daily(ws, log, args)
-    finally:
-        lock.unlink(missing_ok=True)
+        with run_lock.held(ws, "daily run"):
+            rc = _daily(ws, log, args)
+    except RuntimeError as exc:
+        log.error("Not started: %s. Try again when it finishes.", exc)
+        return 1
     if rc == 0 and not args.no_review:
         from src.web.frontdoor import serve
         serve(ws)
     return rc
+
+
+
+def _locked(ws, log, what, fn, wait_minutes: float = 30):
+    """Run fn while holding the run lock, waiting for a scheduled run to finish first."""
+    try:
+        with run_lock.held(ws, what, wait_minutes,
+                           on_wait=lambda h: log.info("Waiting for the %s that started %s min ago to finish...", h.get("what"), h.get("minutes"))):
+            return fn() or 0
+    except RuntimeError as exc:
+        log.error("Not started: %s.", exc)
+        return 1
+
+
+def _stage_cmds(ws, log, args):
+    if args.restage:
+        with db.session(ws.db_path) as conn:
+            ids = [r[0] for r in conn.execute("SELECT id FROM jobs WHERE status IN ('MANUAL_APPLY','FAILED','NEEDS_LOGIN','NEEDS_MANUAL_OTP','NEEDS_USER_INPUT')")]
+            for jid in ids:
+                conn.execute("DELETE FROM staged_forms WHERE job_id = ?", (jid,))
+                db.set_job_status(conn, jid, "QUALIFIED", "queued again for staging")
+        log.info("Queued %d jobs to be staged again.", len(ids))
+        if not args.stage_only:
+            return 0
+    if args.stage_only:  # fills forms and sends nothing, LinkedIn Easy Apply included
+        import os as _os
+        _os.environ["JOBSPRINT_NO_SUBMIT"] = "1"
+        stage(ws, log, args.stage_limit)
+        return 0
+    if args.send_ready:
+        send_all(ws, log)
+        return 0
+    return 0
 
 
 def check_sources(log) -> int:

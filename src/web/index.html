@@ -116,6 +116,11 @@
     main { grid-template-columns:1fr; padding:12px 16px 16px; } #side { max-height:45vh; } #detail { padding:16px; }
     td.q { width:auto; } .dh .av { display:none; }
   }
+  /* Narrow or short windows: the page scrolls as a whole instead of squeezing the list to nothing. */
+  @media (max-width: 760px), (max-height: 620px) {
+    html, body { height:auto; } main { flex:none; } #detail { overflow:visible; }
+    #side { height:min(60vh, 520px); max-height:none; }
+  }
 </style>
 </head>
 <body>
@@ -421,6 +426,7 @@ $("#sendall").onclick = async () => {
   say("Sending… browser windows open one by one. This page updates when it's done.", 600000);
   const poll = setInterval(async () => {
     const st = await fetch("/api/submit_all").then(r => r.json());
+    if (st.running && st.waiting) say(`Queued: ${st.waiting}. Sending starts right after.`, 600000);
     if (!st.running) { clearInterval(poll); const r = st.result || {};
       const why = (r.why || []).slice(0, 4).join(" · ");
       say(`Done: ${r.sent || 0} sent, ${r.not_confirmed || 0} sent without a thank-you page, ${r.failed || 0} failed, ${r.waiting_for_you || 0} still need you.${why ? " " + why : ""}`, 30000); load(); }
@@ -456,7 +462,7 @@ async function renderEmails() {
       <div class="meta">${esc(m.from_name || "")} &lt;${esc(m.from_addr)}&gt; · ${ago(m.received_at)} · ${esc((m.category || "other").replace("_", " "))}</div></div></div>
     ${sent ? `<div class="banner ok">Replied ${ago(m.sent_at)}.</div>`
       : gap ? `<div class="banner warn">Fill the [FILL IN …] gaps, then press Send. Drafts with gaps are never sent automatically.</div>`
-            : `<div class="banner info">Draft ready. It's sent on the next run if automatic replies are on, or press Send now.</div>`}
+            : `<div class="banner info">Draft ready. Edit it if you like, then press Send reply. Nothing is sent without you.</div>`}
     <h3>Their email</h3><pre class="mail">${esc(m.body_text || "")}</pre>
     <h3>${sent ? "Your reply" : "Your reply (edit freely)"}</h3>
     <textarea class="big" id="reply" ${sent ? "readonly" : ""}>${esc(m.draft_reply || "")}</textarea>
