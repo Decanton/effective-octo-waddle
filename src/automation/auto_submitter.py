@@ -55,6 +55,8 @@ def review_mode(settings: dict | None = None) -> bool:
     import os
     if os.environ.get("JOBSPRINT_NO_SUBMIT") == "1":  # fill everything, send nothing (e.g. a run nobody approved)
         return True
+    if (settings is None or "auto_submit" in settings) and os.environ.get("JOBSPRINT_TEST_CLOCK_FREE") == "1":  # tests: not today's date
+        return False
     settings = settings or load_settings()
     start = settings.get("review_from")
     if not start:

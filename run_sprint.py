@@ -136,6 +136,9 @@ def send_all(ws, log) -> None:
     from src.email_agent.recruiter_replies import auto_send
     from src.settings import load_settings
     settings = load_settings()
+    if auto_submitter.review_mode(settings):  # Kelly checks everything first: no applications, replies or follow-ups go out
+        log.info("Review mode: nothing is sent automatically. Ready applications and reply drafts wait on the review page.")
+        return
     auto_submitter.run(ws, settings)
     try:
         with db.session(ws.db_path) as conn:

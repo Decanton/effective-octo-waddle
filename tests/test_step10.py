@@ -263,3 +263,14 @@ def test_title_only_jobs_and_phone_format():
     assert fit_score({"title": "Data Engineer", "description": ""}, load_profile())[0] >= 0.3
     assert fit_score({"title": "Sales Manager", "description": ""}, load_profile())[0] < 0.22
     assert phone_for("+254 706 921 015", "Tel (ex: 712 123456)") == "706 921 015"
+
+
+def test_review_mode_sends_no_replies_or_follow_ups(tmp_path, monkeypatch):
+    from src.email_agent import followups, recruiter_replies
+    monkeypatch.setenv("JOBSPRINT_NO_SUBMIT", "1")
+    assert recruiter_replies.auto_send(None, {"auto_send": True}) == {"sent": 0, "waiting": 0}
+
+    class C:
+        pass
+    monkeypatch.setattr(followups.analytics, "results", lambda *a, **k: {"applications": [{"follow_up_due": True, "method": "email", "id": 1}]})
+    assert followups.run(C(), {"auto_send": True}, {})["sent"] == 0

@@ -119,7 +119,8 @@ def about_you(conn, row) -> bool:
 def auto_send(conn, cfg: dict, smtp_factory=None) -> dict:
     """Send complete drafts, within the daily cap. Drafts with [FILL IN ...] gaps wait for you."""
     out = {"sent": 0, "waiting": 0}
-    if not cfg.get("auto_send"):
+    from ..automation.auto_submitter import review_mode
+    if not cfg.get("auto_send") or review_mode():
         return out
     from datetime import datetime, timezone
     today = datetime.now(timezone.utc).date().isoformat()

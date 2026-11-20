@@ -32,7 +32,8 @@ def run(conn, cfg: dict, profile: dict, smtp_factory=None) -> dict:
     res = analytics.results(conn, days=45, follow_after=int(cfg.get("after_days", 7)))
     due = [a for a in res["applications"] if a["follow_up_due"] and a["method"] == "email"]
     out["due"] = len(due)
-    if not cfg.get("auto_send", True) or not due:
+    from ..automation.auto_submitter import review_mode
+    if not cfg.get("auto_send", True) or not due or review_mode():
         return out
     from .recruiter_replies import machine_sender
     addr, pw = os.environ.get("EMAIL_ADDRESS"), os.environ.get("EMAIL_APP_PASSWORD")

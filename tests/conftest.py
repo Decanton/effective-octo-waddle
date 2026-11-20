@@ -26,3 +26,9 @@ SECRETS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OLLAMA_MODEL", "EMAIL_ADDRESS", "E
 def _no_real_accounts(monkeypatch):
     for k in SECRETS:
         monkeypatch.delenv(k, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _review_mode_off(monkeypatch):
+    """config's review_from is a real date; tests must behave the same before and after it."""
+    monkeypatch.setenv("JOBSPRINT_TEST_CLOCK_FREE", "1")
