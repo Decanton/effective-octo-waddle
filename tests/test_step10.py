@@ -406,3 +406,21 @@ def test_run_lock_one_at_a_time_and_clears_dead_runs(tmp_path):
     run_lock.path(ws).write_text("999999\nold run")  # a crashed run's lock
     assert run_lock.holder(ws) is None and run_lock.acquire(ws, "new")
     run_lock.release(ws)
+
+
+def test_one_job_is_never_sent_twice(tmp_path):
+    from src import database as db
+    from src.automation import auto_submitter
+    from src.workspace import ensure_workspace
+    from tests.test_step4 import _staged
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    with db.session(ws.db_path) as c:
+        _staged(c, "https://boards.greenhouse.io/acme/jobs/1", title="Data Engineer")
+        _staged(c, "https://boards.greenhouse.io/acme/jobs/1?gh_src=x", title="Data Engineer")
+    sent = []
+    from src.settings import load_settings
+    st = load_settings()
+    st["auto_submit"] = {**st["auto_submit"], "enabled": True, "only_hosts": [""], "max_per_day": 99}
+    auto_submitter.run(ws, st, submit_fn=lambda ws_, sid, *a, **k: sent.append(sid) or {"state": "SUBMITTED"}, approved=True)
+    assert len(sent) == 1

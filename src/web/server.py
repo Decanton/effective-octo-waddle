@@ -46,14 +46,19 @@ def create_app(ws) -> FastAPI:
                        j.priority_score, j.fit_score, j.url, j.source, t.docx_path, t.matched_keywords,
                        (SELECT path FROM screenshots WHERE staged_form_id = s.id ORDER BY id DESC LIMIT 1) AS shot
                 FROM staged_forms s JOIN jobs j ON j.id = s.job_id LEFT JOIN tailored_cvs t ON t.id = s.cv_id
-                WHERE s.state IN ('READY_TO_SUBMIT','NEEDS_USER_INPUT','MANUAL_APPLY','NEEDS_LOGIN','NEEDS_MANUAL_OTP','SENT_UNCONFIRMED')
-                   OR (s.state = 'SUBMITTED' AND s.submitted_at >= date('now', '-14 days'))
+                WHERE (s.state IN ('READY_TO_SUBMIT','NEEDS_USER_INPUT','MANUAL_APPLY','NEEDS_LOGIN','NEEDS_MANUAL_OTP','SENT_UNCONFIRMED')
+                       OR (s.state = 'SUBMITTED' AND s.submitted_at >= date('now', '-14 days')))
+                  AND s.id = (SELECT MAX(id) FROM staged_forms WHERE job_id = s.job_id)  -- only a job's latest fill
                 ORDER BY CASE s.state WHEN 'READY_TO_SUBMIT' THEN 0 WHEN 'NEEDS_USER_INPUT' THEN 1 WHEN 'SENT_UNCONFIRMED' THEN 2
                          WHEN 'NEEDS_MANUAL_OTP' THEN 3 WHEN 'NEEDS_LOGIN' THEN 3 WHEN 'MANUAL_APPLY' THEN 4 ELSE 5 END,
                          s.submitted_at DESC, j.priority_score DESC""").fetchall()
-        out = []
+        out, seen = [], set()
         for r in rows:
             d = dict(r)
+            key = ((d["company"] or "").strip().lower(), (d["title"] or "").strip().lower())
+            if d["company"] and key in seen:  # the same job found under two links: show it once
+                continue
+            seen.add(key)
             d["answers"] = json.loads(d.pop("answers_json") or "[]")
             d["missing"] = json.loads(d.pop("missing_json") or "[]")
             d["has_shot"] = bool(d.pop("shot"))
@@ -301,7 +306,17 @@ def create_app(ws) -> FastAPI:
 
     @app.post("/api/skip/{sid}")
     def skip(sid: int):
-        return _set(sid, "SKIPPED", "SKIPPED", "skipped on the review page")
+        res = _set(sid, "SKIPPED", "SKIPPED", "skipped on the review page")
+        with db.session(ws.db_path) as c:  # the same job found under another link goes too
+            for (other,) in c.execute(
+                    "SELECT s.id FROM staged_forms s JOIN jobs j ON j.id = s.job_id JOIN staged_forms me ON me.id = ? "
+                    "JOIN jobs mj ON mj.id = me.job_id WHERE s.id != me.id AND j.company IS NOT NULL "
+                    "AND lower(j.company) = lower(mj.company) AND lower(j.title) = lower(mj.title) "
+                    "AND s.state NOT IN ('SUBMITTED','SKIPPED','SENT_UNCONFIRMED')", (sid,)).fetchall():
+                c.execute("UPDATE staged_forms SET state = 'SKIPPED' WHERE id = ?", (other,))
+                j = c.execute("SELECT job_id FROM staged_forms WHERE id = ?", (other,)).fetchone()[0]
+                db.set_job_status(c, j, "SKIPPED", "skipped on the review page (same job)")
+        return res
 
     @app.post("/api/applied_myself/{sid}")
     def applied_myself(sid: int):
@@ -310,9 +325,18 @@ def create_app(ws) -> FastAPI:
     @app.get("/api/emails")
     def emails():
         with db.session(ws.db_path) as c:
-            return [dict(r) for r in c.execute(
+            rows = [dict(r) for r in c.execute(
                 "SELECT id, from_addr, from_name, subject, received_at, body_text, category, draft_reply, state, sent_at "
-                "FROM recruiter_emails WHERE state != 'DISMISSED' ORDER BY state = 'SENT', received_at DESC LIMIT 200")]
+                "FROM recruiter_emails WHERE state != 'DISMISSED' ORDER BY state = 'SENT', received_at DESC LIMIT 400")]
+        from ..email_agent.recruiter_replies import machine_sender
+        out, seen = [], set()
+        for r in rows:  # newsletters and mailers saved before the filter existed, and repeats of one email
+            key = ((r["from_addr"] or "").lower(), (r["subject"] or "").strip().lower())
+            if machine_sender(r["from_addr"], r["subject"]) or key in seen:
+                continue
+            seen.add(key)
+            out.append(r)
+        return out[:200]
 
     @app.post("/api/emails/{eid}/send")
     def send_email(eid: int, payload: dict = Body(...)):

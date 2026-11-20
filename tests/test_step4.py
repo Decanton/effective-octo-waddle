@@ -85,8 +85,8 @@ def test_draft_and_send_only_on_request(tmp_path, monkeypatch):
         assert not recruiter_replies.send(c, row["id"], "again", smtp_factory=FakeSMTP)["ok"]  # never twice
 
 
-def _staged(c, url, state="READY_TO_SUBMIT", answers=(), error=None, prio=0.5):
-    jid = db.upsert_job(c, {"url": url + "#job", "source": "greenhouse:x", "title": "Data Engineer", "company": "Acme",
+def _staged(c, url, state="READY_TO_SUBMIT", answers=(), error=None, prio=0.5, title=None):
+    jid = db.upsert_job(c, {"url": url + "#job", "source": "greenhouse:x", "title": title or f"Data Engineer {url}", "company": "Acme",
                             "status": state, "age_hours": 2, "priority_score": prio})
     cur = c.execute("INSERT INTO staged_forms(job_id, form_url, answers_json, state, error, created_at) VALUES (?,?,?,?,?,?)",
                     (jid, url, json.dumps(list(answers)), state, error, db.now_iso()))

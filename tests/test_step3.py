@@ -118,6 +118,17 @@ def test_review_api(tmp_path):
     assert isinstance(summary, dict) and {"forms", "jobs", "sent_today", "review_mode", "linkedin_held"} <= summary.keys()
     items = client.get("/api/staged").json()
     assert len(items) == 1 and items[0]["state"] == "MANUAL_APPLY"
+    with db.session(ws.db_path) as c:  # filled twice, and the same job under a second link: one row
+        c.execute("INSERT INTO staged_forms(job_id, form_url, state, created_at) VALUES (?,?,?,?)", (jid, "https://x/1", "MANUAL_APPLY", db.now_iso()))
+        j2 = db.upsert_job(c, {"url": "https://x/1?ref=2", "source": "remotive", "title": "AI Trainer", "status": "MANUAL_APPLY", "age_hours": 1})
+        c.execute("INSERT INTO staged_forms(job_id, form_url, state, created_at) VALUES (?,?,?,?)", (j2, "https://x/1?ref=2", "MANUAL_APPLY", db.now_iso()))
+        c.execute("UPDATE jobs SET company = 'Acme'")
+        c.execute("INSERT INTO recruiter_emails(message_id, from_addr, subject, state, created_at) VALUES "
+                  "('a','fantasy@email.premierleague.com','Your team','SENT',?), ('b','jane@acme.test','Interview','NEW',?), "
+                  "('c','jane@acme.test','Interview','NEW',?)", (db.now_iso(),) * 3)
+    items = client.get("/api/staged").json()
+    assert len(items) == 1
+    assert [e["from_addr"] for e in client.get("/api/emails").json()] == ["jane@acme.test"]
     assert client.post(f"/api/skip/{items[0]['id']}").json()["ok"]
     assert client.get("/api/staged").json() == []
     assert client.get("/files/screenshot/999").status_code == 404
