@@ -63,6 +63,13 @@ def create_app(ws) -> FastAPI:
         return out
 
     @app.get("/api/summary")
+    def _review():
+        from ..automation.auto_submitter import review_mode
+        try:
+            return review_mode()
+        except Exception:
+            return False
+
     def summary():
         with db.session(ws.db_path) as c:
             forms = {r[0]: r[1] for r in c.execute("SELECT state, COUNT(*) FROM staged_forms GROUP BY state")}
@@ -78,6 +85,9 @@ def create_app(ws) -> FastAPI:
                                  "google": st["google_sign_in"]["enabled"]},
                     "last_run": dict(last) if last else None,
                     "emails_waiting": c.execute("SELECT COUNT(*) FROM recruiter_emails WHERE state = 'DRAFTED'").fetchone()[0],
+                    "linkedin_held": c.execute("SELECT COUNT(*) FROM jobs WHERE status = 'QUALIFIED' AND "
+                                               "status_reason LIKE 'LinkedIn Easy Apply: review mode%'").fetchone()[0],
+                    "review_mode": _review(),
                     "task": _task_status()}
 
     @app.get("/api/explain/{sid}")
@@ -241,8 +251,25 @@ def create_app(ws) -> FastAPI:
         _bulk["running"] = True
 
         def work():
+            import os as _o
             try:
-                _bulk["result"] = auto_submitter.run(ws, settings)
+                res = auto_submitter.run(ws, settings, approved=True)
+                # LinkedIn Easy Apply jobs held back by review mode: apply to them now that you've said go.
+                with db.session(ws.db_path) as c:
+                    held = [r[0] for r in c.execute("SELECT id FROM jobs WHERE status = 'QUALIFIED' "
+                                                    "AND status_reason LIKE 'LinkedIn Easy Apply: review mode%'")]
+                if held:
+                    from ..automation import form_stager
+                    _o.environ["JOBSPRINT_APPROVED"] = "1"
+                    try:
+                        st = form_stager.run(ws, len(held), only_ids=held)
+                    finally:
+                        _o.environ.pop("JOBSPRINT_APPROVED", None)
+                    res["linkedin_sent"] = st.get("SUBMITTED", 0) + st.get("SENT_UNCONFIRMED", 0)
+                    res["sent"] += res["linkedin_sent"]
+                _bulk["result"] = res
+            except Exception as exc:
+                _bulk["result"] = {"sent": 0, "failed": 0, "waiting_for_you": 0, "why": [f"error: {exc}"]}
             finally:
                 _bulk["running"] = False
                 _submit_lock.release()

@@ -136,8 +136,8 @@ linkedin_search:
   # requests). Easy Apply jobs from the last 48 hours, Kenya and remote worldwide, for each search
   # in search_queries.yaml; then read the full post of up to max_details of them. Human-paced.
   enabled: true
-  pages_per_search: 1
-  max_details: 60
+  pages_per_search: 3
+  max_details: 120
 
 linkedin_easy_apply:
   # Apply through LinkedIn while signed in to LinkedIn in Job Agent Chrome (Kelly turned this on

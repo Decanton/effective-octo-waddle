@@ -55,6 +55,8 @@ def review_mode(settings: dict | None = None) -> bool:
     import os
     if os.environ.get("JOBSPRINT_NO_SUBMIT") == "1":  # fill everything, send nothing (e.g. a run nobody approved)
         return True
+    if os.environ.get("JOBSPRINT_APPROVED") == "1":  # you pressed "Send all ready" on the review page
+        return False
     if (settings is None or "auto_submit" in settings) and os.environ.get("JOBSPRINT_TEST_CLOCK_FREE") == "1":  # tests: not today's date
         return False
     settings = settings or load_settings()
@@ -90,11 +92,12 @@ def eligible(row, cfg: dict, ecfg: dict | None = None) -> tuple[bool, str, list[
     return True, "", consents
 
 
-def run(ws, settings: dict | None = None, submit_fn=None) -> dict:
+def run(ws, settings: dict | None = None, submit_fn=None, approved: bool = False) -> dict:
+    """approved=True: you pressed "Send all ready", so review mode doesn't hold anything back."""
     settings = settings or load_settings()
     cfg, ecfg = settings["auto_submit"], settings.get("email_applications") or {}
-    counts = {"sent": 0, "not_confirmed": 0, "failed": 0, "waiting_for_you": 0}
-    if review_mode(settings):
+    counts = {"sent": 0, "not_confirmed": 0, "failed": 0, "waiting_for_you": 0, "why": []}
+    if not approved and review_mode(settings):
         log.info("Review mode (from %s): complete applications wait for you on the review page.", settings.get("review_from"))
         with db.session(ws.db_path) as conn:
             counts["waiting_for_you"] = conn.execute("SELECT COUNT(*) FROM staged_forms WHERE state = 'READY_TO_SUBMIT'").fetchone()[0]
@@ -116,6 +119,7 @@ def run(ws, settings: dict | None = None, submit_fn=None) -> dict:
             ok, why = False, "automatic form sending is off"
         if not ok:
             counts["waiting_for_you"] += 1
+            counts["why"].append(f"{row['company']}: {why}")
             log.info("Waiting for you: %s @ %s (%s)", row["title"][:60], row["company"], why)
             continue
         if (ebudget if by_email else budget) <= 0:
@@ -137,6 +141,7 @@ def run(ws, settings: dict | None = None, submit_fn=None) -> dict:
         except Exception as exc:  # one bad form must not stop the rest
             log.warning("Sending failed for %s: %s", row["title"], exc)
             counts["failed"] += 1
+            counts["why"].append(f"{row['company']}: {exc}"[:200])
             continue
         if res.get("ok"):
             counts["sent"] += 1
@@ -149,6 +154,7 @@ def run(ws, settings: dict | None = None, submit_fn=None) -> dict:
             budget -= 1  # it was probably sent; count it so the cap holds
         else:
             counts["failed"] += 1
+            counts["why"].append(f"{row['company']}: {res.get('error')}"[:200])
             log.info("  not sent: %s", res.get("error"))
     log.info("Automatic sending done: %d sent, %d sent but no thank-you page seen, %d failed, %d waiting for you.",
              counts["sent"], counts["not_confirmed"], counts["failed"], counts["waiting_for_you"])

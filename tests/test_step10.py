@@ -274,3 +274,23 @@ def test_review_mode_sends_no_replies_or_follow_ups(tmp_path, monkeypatch):
         pass
     monkeypatch.setattr(followups.analytics, "results", lambda *a, **k: {"applications": [{"follow_up_due": True, "method": "email", "id": 1}]})
     assert followups.run(C(), {"auto_send": True}, {})["sent"] == 0
+
+
+def test_send_all_ready_works_in_review_mode(tmp_path, monkeypatch):
+    """Review mode holds automatic sends, never the review page's 'Send all ready'."""
+    from src import database as db
+    from src.automation import auto_submitter as a
+    from src.settings import load_settings
+    from src.workspace import ensure_workspace
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    with db.session(ws.db_path) as c:
+        jid = db.upsert_job(c, {"url": "https://jobs.lever.co/acme/1", "source": "lever:acme", "title": "Dev", "company": "Acme", "status": "READY_TO_SUBMIT"})
+        c.execute("INSERT INTO staged_forms(job_id, form_url, answers_json, state, created_at) VALUES (?,?,?,?,?)",
+                  (jid, "https://jobs.lever.co/acme/1/apply", "[]", "READY_TO_SUBMIT", db.now_iso()))
+    monkeypatch.setattr(a, "review_mode", lambda settings=None: True)
+    sent = []
+    fake = lambda ws, sid, *x, **k: sent.append(sid) or {"ok": True}
+    s = load_settings()
+    assert a.run(ws, s, submit_fn=fake)["sent"] == 0 and not sent
+    assert a.run(ws, s, submit_fn=fake, approved=True)["sent"] == 1 and sent == [1]

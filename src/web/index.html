@@ -199,7 +199,11 @@ function renderTop() {
   document.querySelectorAll(".stat").forEach(b => b.onclick = () => { switchTab("jobs"); filter = b.dataset.g; cur = 0; render(); });
   const lr = summary.last_run;
   const task = summary.task || {};
-  $("#autobar").innerHTML = `
+  $("#autobar").innerHTML = summary.review_mode ? `
+    <span><span class="dot on"></span><b>You approve each send.</b> Runs find and fill jobs; press Submit or Send all ready to send them.</span>
+    ${summary.linkedin_held ? `<span>${summary.linkedin_held} LinkedIn Easy Apply job(s) wait for Send all ready</span>` : ""}
+    ${lr ? `<span>Last run: ${esc(lr.mode)} ${ago(lr.finished_at || lr.started_at)}</span>` : ""}
+    ${upd ? `<span>Version ${esc((upd.installed || "?").slice(0, 7))} <button class="link" id="updbtn">Check for updates</button></span>` : ""}` : `
     <span><span class="dot ${st.auto_forms ? "on" : ""}"></span>Forms: ${st.auto_forms ? `auto-send, up to ${st.forms_per_day}/day (${sent.forms || 0} today)` : "wait for you"}</span>
     <span><span class="dot ${st.auto_email ? "on" : ""}"></span>Email applications: ${st.auto_email ? `auto-send, up to ${st.email_per_day}/day (${sent.email || 0} today)` : "wait for you"}</span>
     <span><span class="dot ${st.google ? "on" : ""}"></span>Continue with Google: ${st.google ? "on" : "off"}</span>
@@ -410,7 +414,7 @@ async function skip() {
 }
 
 $("#sendall").onclick = async () => {
-  const n = items.filter(i => i.state === "READY_TO_SUBMIT").length;
+  const n = items.filter(i => i.state === "READY_TO_SUBMIT").length + ((summary && summary.linkedin_held) || 0);
   if (!n) return say("No verified applications to submit.");
   if (!confirm(`Submit all ${n} verified applications now? Each form is checked again before Submit; forms with a CAPTCHA or a consent box you haven't allowed stay here.`)) return;
   try { await post("/api/submit_all"); } catch (e) { return say("Error: " + e.message, 8000); }
@@ -418,7 +422,8 @@ $("#sendall").onclick = async () => {
   const poll = setInterval(async () => {
     const st = await fetch("/api/submit_all").then(r => r.json());
     if (!st.running) { clearInterval(poll); const r = st.result || {};
-      say(`Done: ${r.sent || 0} sent, ${r.not_confirmed || 0} sent without a thank-you page, ${r.failed || 0} failed, ${r.waiting_for_you || 0} still need you.`, 15000); load(); }
+      const why = (r.why || []).slice(0, 4).join(" · ");
+      say(`Done: ${r.sent || 0} sent, ${r.not_confirmed || 0} sent without a thank-you page, ${r.failed || 0} failed, ${r.waiting_for_you || 0} still need you.${why ? " " + why : ""}`, 30000); load(); }
   }, 4000);
 };
 const runTask = async (what, text) => {

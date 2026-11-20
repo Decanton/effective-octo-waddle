@@ -480,7 +480,7 @@ def snapshot(conn, job: dict) -> None:
                  (json.dumps(snap), job["id"]))
 
 
-def run(ws, limit: int | None = None) -> dict:
+def run(ws, limit: int | None = None, only_ids: list[int] | None = None) -> dict:
     """Stage the top qualified jobs that haven't been staged yet."""
     from .browser_manager import browser
     profile = load_profile()
@@ -492,6 +492,8 @@ def run(ws, limit: int | None = None) -> dict:
     with db.session(ws.db_path) as conn:
         pool = [dict(r) for r in conn.execute(
             "SELECT * FROM jobs WHERE status = 'QUALIFIED' ORDER BY priority_score DESC LIMIT 600")]
+        if only_ids is not None:
+            pool = [j for j in pool if j["id"] in set(only_ids)]
         walls = {urlparse(r[0]).netloc for r in conn.execute(
             "SELECT form_url FROM staged_forms WHERE state IN ('NEEDS_MANUAL_OTP','NEEDS_LOGIN') AND created_at >= date('now','-14 days')")}
     # What finishes with nobody there goes first: "email your CV" posts, then Greenhouse/Lever/Ashby/Workable
