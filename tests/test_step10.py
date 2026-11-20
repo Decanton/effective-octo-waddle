@@ -358,3 +358,34 @@ def test_sign_in_presses_the_forms_button_and_linkedin_cards_without_links(tmp_p
                          '<li data-occludable-job-id="4012345679"></li></ul>')
         got = linkedin_browser.cards(page)
         assert [(c["id"], c["title"], c["company"]) for c in got] == [("4012345678", "AI Data Trainer", "Acme")]
+
+
+def test_linkedin_results_list_parser_and_guest_url():
+    from src.discovery import linkedin_browser as lb
+    html = ('<li><div class="base-card" data-entity-urn="urn:li:jobPosting:4099887766">'
+            '<a class="base-card__full-link" href="https://ke.linkedin.com/jobs/view/ai-trainer-at-acme-4099887766?trk=x"></a>'
+            '<h3 class="base-search-card__title"> AI Trainer </h3><h4 class="base-search-card__subtitle"><a>Acme</a></h4>'
+            '<span class="job-search-card__location">Nairobi, Kenya</span><time datetime="2026-11-20">1 day ago</time></div></li>'
+            '<li><div>no job here</div></li>')
+    got = lb.parse_guest(html)
+    assert got == [{"id": "4099887766", "title": "AI Trainer", "company": "Acme", "location": "Nairobi, Kenya",
+                    "posted": "2026-11-20", "applied": False}]
+    u = lb.guest_url("ai trainer", lb.KENYA_GEO, False, 48, 25)
+    assert u.startswith(lb.GUEST_API + "?keywords=ai+trainer") and "f_TPR=r172800" in u and u.endswith("&start=25")
+
+
+def test_waits_for_a_form_that_draws_its_fields_late(tmp_path, monkeypatch):
+    import pytest
+    from tests.test_step4 import _browser_ok
+    if not _browser_ok():
+        pytest.skip("no browser")
+    from src.automation import form_stager
+    from src.automation.browser_manager import browser
+    from src.workspace import ensure_workspace
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    with browser(ensure_workspace(tmp_path / "JobSprintAgent")) as ctx:
+        page = ctx.new_page()
+        page.set_content('<form id=f><input id=a></form><script>setTimeout(() => { for (const n of ["first_name","last_name","email"]) '
+                         '{ const i = document.createElement("input"); i.id = n; document.getElementById("f").appendChild(i); } }, 2500)</script>')
+        form_stager._wait_form_ready(page)
+        assert page.locator("input").count() == 4

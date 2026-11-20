@@ -88,6 +88,55 @@ def _render_all(page) -> None:
     }""")
 
 
+GUEST_API = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+
+
+def guest_url(term: str, geo: str, remote: bool, hours: int = 48, start: int = 0) -> str:
+    return search_url(term, geo, remote, hours, start).replace("https://www.linkedin.com/jobs/search/", GUEST_API)
+
+
+def parse_guest(html: str) -> list[dict]:
+    """Cards from LinkedIn's lightweight results list (the same list its own page loads as you scroll)."""
+    from bs4 import BeautifulSoup
+    out = []
+    for li in BeautifulSoup(html or "", "html.parser").select("li"):
+        card = li.select_one("[data-entity-urn]")
+        m = re.search(r"jobPosting:(\d{6,})", card.get("data-entity-urn", "")) if card else None
+        if not m:
+            a = li.select_one('a[href*="/jobs/view/"]')
+            m = re.search(r"/jobs/view/(?:[^/?]*-)?(\d{6,})", a.get("href", "")) if a else None
+        title = li.select_one(".base-search-card__title, h3")
+        if not (m and title):
+            continue
+        sub, loc, t = li.select_one(".base-search-card__subtitle, h4"), li.select_one(".job-search-card__location"), li.select_one("time")
+        out.append({"id": m.group(1), "title": " ".join(title.get_text().split()),
+                    "company": " ".join(sub.get_text().split()) if sub else "", "location": " ".join(loc.get_text().split()) if loc else "",
+                    "posted": t.get("datetime") if t else None, "applied": False})
+    return out
+
+
+def _guest_cards(page, term, geo, remote, hours, start) -> list[dict] | None:
+    """The results list fetched directly with Job Agent Chrome's cookies, for when the full search page is too slow."""
+    try:
+        r = page.request.get(guest_url(term, geo, remote, hours, start), timeout=30000)
+    except Exception as exc:
+        log.info("LinkedIn results list didn't load either: %s", str(exc)[:80])
+        return None
+    if r.status == 429:
+        log.info("LinkedIn is rate-limiting the results list (429); stopping the search for this run.")
+        return None
+    return parse_guest(r.text()) if r.ok else []
+
+
+def _debug_dump(ws, page, name: str) -> None:
+    try:
+        base = ws.logs / f"linkedin_{name}"
+        page.screenshot(path=str(base) + ".png", timeout=10000)
+        (base.parent / (base.name + ".txt")).write_text(f"{page.url}\n\n{page.inner_text('body', timeout=5000)[:20000]}", encoding="utf-8")
+    except Exception:
+        pass
+
+
 def _age(posted: str | None) -> float:
     from .more_boards import age_of
     a = age_of(posted) if posted else None
@@ -103,6 +152,7 @@ def fetch(ws, search_cfg: dict, cfg: dict) -> list[dict]:
     hours = int(search_cfg.get("max_age_hours", 48))
     max_pages, max_details = int(cfg.get("pages_per_search", 1)), int(cfg.get("max_details", 60))
     found: dict[str, dict] = {}
+    slow, use_list = 0, False
     with browser(ws) as ctx:
         page = ctx.new_page()
         try:
@@ -112,23 +162,33 @@ def fetch(ws, search_cfg: dict, cfg: dict) -> list[dict]:
             for s in search_cfg.get("searches", []):
                 for geo, remote, place in ((KENYA_GEO, False, "Kenya"), (WORLDWIDE_GEO, True, "Remote")):
                     for p in range(max_pages):
-                        try:  # LinkedIn can be slow; one slow page mustn't end the whole search
-                            page.goto(search_url(_plain_term(s["term"]), geo, remote, hours, p * 25),
-                                      wait_until="domcontentloaded", timeout=60000)
-                            page.wait_for_selector(f"{RESULTS}, {NO_RESULTS}", timeout=30000)
-                        except Exception as exc:
-                            log.info("LinkedIn search page slow or empty (%s): %s", s["term"][:40], str(exc)[:80])
+                        term = _plain_term(s["term"])
+                        got = None
+                        if not use_list:
+                            try:  # LinkedIn can be slow; one slow page mustn't end the whole search
+                                page.goto(search_url(term, geo, remote, hours, p * 25), wait_until="domcontentloaded", timeout=60000)
+                                page.wait_for_selector(f"{RESULTS}, {NO_RESULTS}", timeout=30000)
+                                page.wait_for_timeout(1500)
+                                if page.locator(NO_RESULTS).count():
+                                    break  # no Easy Apply jobs for this search in the last 48 hours
+                                _render_all(page)
+                                got = [c for c in cards(page) if not c["applied"]]
+                            except Exception as exc:
+                                log.info("LinkedIn search page slow or unreadable (%s): %s", s["term"][:40], str(exc)[:80])
                             if lea.CHECKPOINT.search(page.url or ""):
+                                log.warning("LinkedIn showed a security check; stopping the LinkedIn search for this run.")
                                 return list(found.values())
-                            break
-                        page.wait_for_timeout(1500)
-                        if page.locator(NO_RESULTS).count():
-                            break  # no Easy Apply jobs for this search in the last 48 hours
-                        _render_all(page)
-                        if lea.CHECKPOINT.search(page.url):
-                            log.warning("LinkedIn showed a security check; stopping the LinkedIn search for this run.")
-                            return list(found.values())
-                        got = [c for c in cards(page) if not c["applied"]]
+                            if not got:
+                                slow += 1
+                                if slow == 1:
+                                    _debug_dump(ws, page, "search_page")  # what the page showed, for fixing it
+                                if slow >= 2:  # the full page keeps failing: use the results list from now on
+                                    use_list = True
+                                    log.info("LinkedIn search pages keep failing; reading LinkedIn's results list instead.")
+                        if got is None or (not got and use_list):
+                            got = _guest_cards(page, term, geo, remote, hours, p * 25)
+                            if got is None:
+                                return list(found.values())
                         for c in got:
                             if c["id"] not in found:
                                 found[c["id"]] = new_job(
@@ -144,6 +204,19 @@ def fetch(ws, search_cfg: dict, cfg: dict) -> list[dict]:
             excl = [w.lower() for w in search_cfg.get("title_exclude") or []]
             todo = [j for j in found.values() if not any(w in j["title"].lower() for w in excl)]
             for j in todo[:max_details]:
+                if use_list:  # the light version of the job page; the full one was too slow today
+                    try:
+                        r = page.request.get(f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{j['external_id']}", timeout=30000)
+                        if r.ok:
+                            from bs4 import BeautifulSoup
+                            d = BeautifulSoup(r.text(), "html.parser").select_one(".show-more-less-html__markup, .description__text")
+                            j["description"] = d.get_text("\n", strip=True) if d else ""
+                        elif r.status == 429:
+                            break
+                    except Exception:
+                        pass
+                    _pause(1.5, 3.0)
+                    continue
                 try:
                     page.goto(j["url"], wait_until="domcontentloaded", timeout=60000)
                     page.wait_for_timeout(2000)

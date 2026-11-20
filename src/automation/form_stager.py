@@ -161,6 +161,34 @@ def _settle(page):
     page.wait_for_timeout(1500)
 
 
+def _wait_form_ready(page, timeout_ms: int = 25000) -> None:
+    """Wait until a slow form (e.g. Greenhouse's new boards, built in the browser) has finished
+    drawing its fields: the number of visible fields stays the same for three seconds.
+    Filling earlier gets wiped when the page finishes loading."""
+    last, same, waited = -1, 0, 0
+    while waited < timeout_ms:
+        try:
+            n = page.locator("input:visible, textarea:visible, select:visible, [role=combobox]:visible").count()
+        except Exception:
+            n = -1
+        same = same + 1 if n == last and n > 0 else 0
+        if same >= 3:
+            return
+        last = n
+        page.wait_for_timeout(1000)
+        waited += 1000
+
+
+def _screenshot(page, path) -> None:
+    try:
+        page.screenshot(path=str(path), full_page=True, timeout=45000)
+    except Exception:
+        try:
+            page.screenshot(path=str(path), timeout=20000)  # a very long page: the visible part is enough
+        except Exception as exc:
+            log.info("  screenshot failed (%s); continuing without it", str(exc)[:80])
+
+
 def _follow(page, job: dict, depth: int = 3):
     """Follow a job-board listing through its Apply link to the company's real form.
 
@@ -431,6 +459,7 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
             return _needs_login(conn, jid, cv_id, page.url)
         url = page.url
         hia.pause()
+    _wait_form_ready(page)
     fields = form_fields.discover(page)
     if not fields:
         conn.execute("INSERT INTO staged_forms(job_id, cv_id, form_url, state, created_at, error) VALUES (?,?,?,?,?,?)",
@@ -464,7 +493,7 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
         log.info("  not verified: %s", "; ".join(problems[:5]))
         missing += [p for p in problems if p not in missing]
     shot = ws.screenshots / f"{jid}_{_safe(job.get('company'))}_staged.png"
-    page.screenshot(path=str(shot), full_page=True)
+    _screenshot(page, shot)
     state = "NEEDS_USER_INPUT" if missing else "READY_TO_SUBMIT"
     note = None
     if hia.detect(page) == "captcha":  # a visible CAPTCHA on the form: can't finish unattended; kept on the optional list
