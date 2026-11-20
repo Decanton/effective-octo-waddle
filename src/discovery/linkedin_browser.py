@@ -46,19 +46,46 @@ def _pause(lo=2.5, hi=5.5):
 def cards(page) -> list[dict]:
     """Job cards on a LinkedIn search results page."""
     return page.evaluate(r"""
-    () => [...document.querySelectorAll('a[href*="/jobs/view/"]')].map(a => {
-      const m = a.href.match(/\/jobs\/view\/(?:[^\/]*-)?(\d{6,})/); if (!m) return null;
-      const card = a.closest('li, .job-card-container, [data-job-id]') || a.parentElement;
+    () => {
+      const seen = new Set(), out = [];
+      const ids = el => { const a = el.querySelector && el.querySelector('a[href*="/jobs/view/"], a[href*="currentJobId="]');
+        const m = a && (a.href.match(/\/jobs\/view\/(?:[^\/]*-)?(\d{6,})/) || a.href.match(/currentJobId=(\d{6,})/));
+        return [el.getAttribute('data-occludable-job-id') || el.getAttribute('data-job-id') || (m && m[1]), a]; };
+      const roots = [...document.querySelectorAll('[data-occludable-job-id], [data-job-id]')];
+      for (const a of document.querySelectorAll('a[href*="/jobs/view/"], a[href*="currentJobId="]'))
+        if (!a.closest('[data-occludable-job-id], [data-job-id]')) roots.push(a.closest('li') || a);
+      for (const card of roots) {
+        const [id, a] = ids(card); if (!id || seen.has(id) || !/^\d{6,}$/.test(id)) continue; seen.add(id);
+        out.push([id, a, card]);
+      }
+      return out.map(([id, a, card]) => {
       const txt = s => { const e = card && card.querySelector(s); return e ? e.innerText.replace(/\s+/g, ' ').trim() : ''; };
-      const title = (a.getAttribute('aria-label') || a.innerText || '').replace(/\s+/g, ' ').replace(/ with verification$/i, '').trim();
+      const tEl = a || card.querySelector('strong, .job-card-list__title, .artdeco-entity-lockup__title');
+      const title = ((a && a.getAttribute('aria-label')) || (tEl && tEl.innerText) || '').split('\n')[0].replace(/\s+/g, ' ').replace(/ with verification$/i, '').trim();
       const time = card && card.querySelector('time');
-      return { id: m[1], title,
+      return { id, title,
                company: txt('.artdeco-entity-lockup__subtitle, .job-card-container__primary-description, .job-card-container__company-name'),
                location: txt('.artdeco-entity-lockup__caption, .job-card-container__metadata-item, .job-card-container__metadata-wrapper li'),
                posted: time ? time.getAttribute('datetime') : null,
                applied: /\bapplied\b/i.test(card ? card.innerText : '') };
-    }).filter(Boolean)
+      }).filter(c => c.title);
+    }
     """)
+
+
+RESULTS = 'a[href*="/jobs/view/"], a[href*="currentJobId="], [data-occludable-job-id], [data-job-id]'
+NO_RESULTS = '.jobs-search-no-results-banner, .jobs-search-two-pane__no-results-banner--expand'
+
+
+def _render_all(page) -> None:
+    """LinkedIn draws a card's text only once it's scrolled into view: scroll the result list down."""
+    page.evaluate("""async () => {
+      const first = document.querySelector('[data-occludable-job-id], [data-job-id]');
+      let box = first; while (box && box !== document.body && !(box.scrollHeight > box.clientHeight + 20 &&
+             /(auto|scroll)/.test(getComputedStyle(box).overflowY))) box = box.parentElement;
+      box = box && box !== document.body ? box : document.scrollingElement;
+      for (let y = 0; y < box.scrollHeight; y += 400) { box.scrollTop = y; await new Promise(r => setTimeout(r, 250)); }
+    }""")
 
 
 def _age(posted: str | None) -> float:
@@ -88,13 +115,16 @@ def fetch(ws, search_cfg: dict, cfg: dict) -> list[dict]:
                         try:  # LinkedIn can be slow; one slow page mustn't end the whole search
                             page.goto(search_url(_plain_term(s["term"]), geo, remote, hours, p * 25),
                                       wait_until="domcontentloaded", timeout=60000)
-                            page.wait_for_selector('a[href*="/jobs/view/"]', timeout=20000)
+                            page.wait_for_selector(f"{RESULTS}, {NO_RESULTS}", timeout=30000)
                         except Exception as exc:
                             log.info("LinkedIn search page slow or empty (%s): %s", s["term"][:40], str(exc)[:80])
                             if lea.CHECKPOINT.search(page.url or ""):
                                 return list(found.values())
                             break
                         page.wait_for_timeout(1500)
+                        if page.locator(NO_RESULTS).count():
+                            break  # no Easy Apply jobs for this search in the last 48 hours
+                        _render_all(page)
                         if lea.CHECKPOINT.search(page.url):
                             log.warning("LinkedIn showed a security check; stopping the LinkedIn search for this run.")
                             return list(found.values())

@@ -248,6 +248,10 @@ def _sign_in_then_retry(page, job: dict, ws=None) -> str | None:
     url, active = _follow(page, job)
     if url and active is not page:
         page.goto(url, wait_until="domcontentloaded")
+    from .portal_accounts import still_on_login
+    if still_on_login(page):  # the site sent us back to its sign-in page: the sign-in didn't hold
+        log.info("  %s still shows its sign-in page after signing in; the job waits for you", urlparse(page.url).netloc)
+        return None
     return url
 
 

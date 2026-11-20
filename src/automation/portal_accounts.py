@@ -40,7 +40,7 @@ def login_id(email: str) -> str:
 
 def still_on_login(page) -> bool:
     """True when the page is (still) a sign-in form: the sign-in didn't take."""
-    page.wait_for_timeout(2500)
+    _settle(page)
     if not page.locator("input[type=password]:visible").count():
         return False
     return bool(LOGIN_URL.search(page.url or "") or (LOGIN_WORDS.search(_text(page)) and not SIGNUP_WORDS.search(_text(page))))
@@ -73,6 +73,42 @@ def _click_text(page, rx) -> bool:
                 page.wait_for_timeout(2500)
                 return True
     return False
+
+
+LOGIN_BUTTON = re.compile(r"^(sign ?in|log ?in|login|continue|next|submit|go|enter)$", re.I)
+SIGNUP_BUTTON = re.compile(r"^(create (an |my |your )?account|sign ?up|register|continue|next|submit|join( now)?)$", re.I)
+
+
+def _submit_form(page, rx) -> bool:
+    """Press the button of the form that holds the password box (not a header link such as
+    "Register" that happens to come first on the page). Falls back to Enter in the password box."""
+    pw = _visible(page, "input[type=password]")
+    if not pw:
+        return _click_text(page, rx)
+    form = pw[0].locator("xpath=ancestor::form[1]")
+    scope = form if _try(form.count, 0) else None
+    if scope is not None:
+        buttons = [b for b in scope.locator("button, input[type=submit], [role=button]").all() if _try(b.is_visible)]
+        for b in buttons:
+            label = " ".join(((_try(lambda: b.inner_text(timeout=300), "") or "") + " " + (b.get_attribute("value") or "")).split())
+            if (label and rx.search(label)) or (not label and (b.get_attribute("type") or "") == "submit"):
+                if _try(lambda: b.click() or True):
+                    _settle(page)
+                    return True
+        typed = [b for b in buttons if (b.get_attribute("type") or "submit") == "submit"]
+        if len(typed) == 1 and _try(lambda: typed[0].click() or True):
+            _settle(page)
+            return True
+    if _try(lambda: pw[-1].press("Enter") or True):
+        _settle(page)
+        return True
+    return False
+
+
+def _settle(page) -> None:
+    page.wait_for_timeout(1500)
+    _try(lambda: page.wait_for_load_state("networkidle", timeout=10000))
+    page.wait_for_timeout(1000)
 
 
 def _label_for(page, el) -> str:
@@ -173,7 +209,10 @@ def _sign_in(page, host: str, creds: tuple[str, str], profile: dict, cfg: dict, 
     if SIGNUP_WORDS.search(text) and not LOGIN_WORDS.search(text):
         _click_text(page, re.compile(r"^(sign ?in|log ?in|already have an account.*)$", re.I))
     _fill_identity(page, creds[0], creds[1], profile)
-    if not _click_text(page, SUBMIT_WORDS):
+    if not _submit_form(page, LOGIN_BUTTON):
+        return "failed"
+    if SIGNUP_WORDS.search(_text(page)) and page.locator("input[type=password]:visible").count() >= 2:
+        log.info("Sign-in at %s landed on a sign-up form instead", host)
         return "failed"
     result = _verify_email(page, host, cfg, since, wait_for_code)
     if result == "ok" and still_on_login(page):
@@ -236,7 +275,7 @@ def sign_in_or_register(page, ws, email: str, cfg: dict, profile: dict | None = 
         return "needs_you"
     if _captcha(page) and not _human(page, "captcha"):  # you tick the CAPTCHA; the agent presses Create
         return "captcha"
-    if not _click_text(page, SUBMIT_WORDS):
+    if not _submit_form(page, SIGNUP_BUTTON):
         return "failed"
     page.wait_for_timeout(1500)
     if _captcha(page) and not _human(page, "captcha"):

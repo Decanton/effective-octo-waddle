@@ -83,6 +83,13 @@ def test_registers_portal_account_and_enters_email_code(tmp_path, monkeypatch):
                 capture(page_)
             return orig(page_, rx)
         monkeypatch.setattr(portal_accounts, "_click_text", click)
+        orig_submit = portal_accounts._submit_form
+
+        def submit(page_, rx):
+            if "register" in page_.url:
+                capture(page_)
+            return orig_submit(page_, rx)
+        monkeypatch.setattr(portal_accounts, "_submit_form", submit)
         res = portal_accounts.sign_in_or_register(
             page, ws, "me@example.com", {"enabled": True, "accept_terms": True, "code_wait_seconds": 1},
             profile={"personal": {"first_name": "D", "last_name": "O", "full_name": "D O"}},

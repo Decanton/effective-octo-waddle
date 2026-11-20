@@ -314,3 +314,47 @@ def test_sign_in_helpers_and_more_blocked_inboxes(tmp_path, monkeypatch):
         page.set_content('<form><label for="a">Name</label><input id="a" value="x"><div><label for="resume">Resume/CV *</label>'
                          '<input type="file" id="resume" required style="display:none"><span>Dickens_CV.docx</span></div></form>')
         assert form_fields.verify(page) == []  # the site emptied the input after uploading; the file's name shows
+
+
+def test_sign_in_presses_the_forms_button_and_linkedin_cards_without_links(tmp_path, monkeypatch):
+    import pytest
+    from tests.test_step4 import _browser_ok
+    if not _browser_ok():
+        pytest.skip("no browser")
+    from src import database as db
+    from src.automation import portal_accounts
+    from src.automation.browser_manager import browser
+    from src.discovery import linkedin_browser
+    from src.workspace import ensure_workspace
+    from tests.test_step5 import _pages_route
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    with db.session(ws.db_path) as c:
+        portal_accounts.save_credentials(c, ws, "careers.org.test", "me@example.com", "pw-123", True)
+    login = ('<header><a href="https://careers.org.test/register">Register</a></header><h1>Login</h1>'
+             '<form onsubmit="event.preventDefault(); if(document.querySelector(\'#p\').value===\'pw-123\') location=\'https://careers.org.test/home\'">'
+             '<label for=e>Email</label><input id=e type=email><label for=p>Password</label><input id=p type=password>'
+             '<button type=submit>Login</button></form><a>Forgot password?</a>')
+    pages = {"https://careers.org.test/auth/login": login,
+             "https://careers.org.test/register": "<h1>Create account</h1><input type=email><input type=password><input type=password>",
+             "https://careers.org.test/home": "<h1>Welcome back</h1>"}
+    with browser(ws) as ctx:
+        _pages_route(ctx, pages)
+        page = ctx.new_page()
+        page.goto("https://careers.org.test/auth/login")
+        res = portal_accounts.sign_in_or_register(page, ws, "me@example.com", {"enabled": True, "code_wait_seconds": 1},
+                                                  profile={"personal": {}}, wait_for_code=lambda *a, **k: None)
+        assert res == "ok" and page.url == "https://careers.org.test/home"
+        page.goto("https://careers.org.test/auth/login")
+        page.fill("#p", "")
+        with db.session(ws.db_path) as c:
+            portal_accounts.save_credentials(c, ws, "careers.org.test", "me@example.com", "wrong", True)
+        res = portal_accounts.sign_in_or_register(page, ws, "me@example.com", {"enabled": True, "code_wait_seconds": 1},
+                                                  profile={"personal": {}}, wait_for_code=lambda *a, **k: None)
+        assert res == "failed"  # still on the login form: not reported as signed in
+        page.set_content('<ul><li data-occludable-job-id="4012345678"><div class="job-card-container">'
+                         '<strong>AI Data Trainer</strong><div class="artdeco-entity-lockup__subtitle">Acme</div></div></li>'
+                         '<li data-occludable-job-id="4012345679"></li></ul>')
+        got = linkedin_browser.cards(page)
+        assert [(c["id"], c["title"], c["company"]) for c in got] == [("4012345678", "AI Data Trainer", "Acme")]

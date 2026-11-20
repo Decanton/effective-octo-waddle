@@ -180,7 +180,7 @@ def main(argv=None) -> int:
     ap.add_argument("--mark-applied", metavar="PLATFORM")
     ap.add_argument("--stage-only", action="store_true")
     ap.add_argument("--stage-limit", type=int)
-    ap.add_argument("--restage", action="store_true", help="retry jobs that ended as MANUAL_APPLY, FAILED, NEEDS_LOGIN or NEEDS_MANUAL_OTP")
+    ap.add_argument("--restage", action="store_true", help="retry jobs that ended as MANUAL_APPLY, FAILED, NEEDS_LOGIN, NEEDS_MANUAL_OTP or NEEDS_USER_INPUT")
     ap.add_argument("--review", action="store_true")
     ap.add_argument("--review-backend", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--port", type=int, default=8000, help=argparse.SUPPRESS)
@@ -248,7 +248,7 @@ def main(argv=None) -> int:
         return 0
     if args.restage:
         with db.session(ws.db_path) as conn:
-            ids = [r[0] for r in conn.execute("SELECT id FROM jobs WHERE status IN ('MANUAL_APPLY','FAILED','NEEDS_LOGIN','NEEDS_MANUAL_OTP')")]
+            ids = [r[0] for r in conn.execute("SELECT id FROM jobs WHERE status IN ('MANUAL_APPLY','FAILED','NEEDS_LOGIN','NEEDS_MANUAL_OTP','NEEDS_USER_INPUT')")]
             for jid in ids:
                 conn.execute("DELETE FROM staged_forms WHERE job_id = ?", (jid,))
                 db.set_job_status(conn, jid, "QUALIFIED", "queued again for staging")
