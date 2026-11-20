@@ -28,7 +28,22 @@ TERMS = re.compile(r"terms|privacy|agree|consent|accept|policy", re.I)
 MARKETING = re.compile(r"newsletter|marketing|promotion|offers|updates by email|job alerts", re.I)
 PHONE_CHECK = re.compile(r"(text|sms) (message|code)|phone verification|verify your (phone|mobile)", re.I)
 CODE_PAGE = re.compile(r"(verification|confirmation|security|one.?time) code|enter (the )?code|check your (e-?mail|inbox)|"
-                       r"we (sent|emailed)|verify your e-?mail|activate your account|confirm your e-?mail", re.I)
+                       r"we (sent|emailed)|verify your e-?mail|activate your account|confirm your e-?mail|"
+                       r"activation (e-?mail|link) (has been |was )?sent", re.I)
+LOGIN_URL = re.compile(r"/(auth/)?(log-?in|sign-?in|signin|login)(\b|/|\?|$)|/site/login", re.I)
+
+
+def login_id(email: str) -> str:
+    """The username used where a site asks for a username rather than an email (same every time)."""
+    return re.sub(r"[^a-z0-9_]", "", email.split("@")[0].lower())[:30] or "applicant"
+
+
+def still_on_login(page) -> bool:
+    """True when the page is (still) a sign-in form: the sign-in didn't take."""
+    page.wait_for_timeout(2500)
+    if not page.locator("input[type=password]:visible").count():
+        return False
+    return bool(LOGIN_URL.search(page.url or "") or (LOGIN_WORDS.search(_text(page)) and not SIGNUP_WORDS.search(_text(page))))
 
 
 def _host(page) -> str:
@@ -73,8 +88,10 @@ def _fill_identity(page, email: str, password: str, profile: dict) -> None:
         value = None
         if kind == "password":
             value = password
-        elif kind == "email" or re.search(r"e-?mail|username|user name|login", label):
+        elif kind == "email" or re.search(r"e-?mail", label):
             value = email
+        elif re.search(r"username|user name|user ?id|login", label):  # a username, not an email: some sites refuse "@"
+            value = login_id(email)
         elif re.search(r"first|given", label):
             value = per.get("first_name")
         elif re.search(r"last|family|surname", label):
@@ -150,6 +167,22 @@ def _human(page, kind: str) -> bool:
     return hia.assist(page, None) != "timeout"  # detects the kind itself; an invisible badge needs nothing
 
 
+def _sign_in(page, host: str, creds: tuple[str, str], profile: dict, cfg: dict, since, wait_for_code) -> str:
+    """Sign in with a saved account and check that it actually worked."""
+    text = _text(page)
+    if SIGNUP_WORDS.search(text) and not LOGIN_WORDS.search(text):
+        _click_text(page, re.compile(r"^(sign ?in|log ?in|already have an account.*)$", re.I))
+    _fill_identity(page, creds[0], creds[1], profile)
+    if not _click_text(page, SUBMIT_WORDS):
+        return "failed"
+    result = _verify_email(page, host, cfg, since, wait_for_code)
+    if result == "ok" and still_on_login(page):
+        err = re.search(r"[^.\n]*(invalid|incorrect|wrong|not (found|exist|activated|verified)|activate)[^.\n]*", _text(page), re.I)
+        log.info("Sign-in at %s didn't take%s", host, f": {err.group(0).strip()[:120]}" if err else "")
+        return "needs_you" if err and re.search(r"activat|verif", err.group(0), re.I) else "failed"
+    return result
+
+
 def _verify_email(page, host: str, cfg: dict, since, wait_for_code) -> str:
     if PHONE_CHECK.search(_text(page)):
         from . import human_assist_interceptor as hia
@@ -186,10 +219,7 @@ def sign_in_or_register(page, ws, email: str, cfg: dict, profile: dict | None = 
     if saved:  # sign in with the account made earlier
         if SIGNUP_WORDS.search(text) and not LOGIN_WORDS.search(text):
             _click_text(page, re.compile(r"^(sign ?in|log ?in|already have an account.*)$", re.I))
-        _fill_identity(page, saved[0], saved[1], profile)
-        if not _click_text(page, SUBMIT_WORDS):
-            return "failed"
-        result = _verify_email(page, host, cfg, since, wait_for_code)
+        result = _sign_in(page, host, saved, profile, cfg, since, wait_for_code)
         log.info("Signed in to %s with the saved account: %s", host, result)
         return result
     if not cfg.get("enabled"):
@@ -212,6 +242,9 @@ def sign_in_or_register(page, ws, email: str, cfg: dict, profile: dict | None = 
     if _captcha(page) and not _human(page, "captcha"):
         return "captcha"
     result = _verify_email(page, host, cfg, since, wait_for_code)
+    if result == "ok" and page.locator("input[type=password]:visible").count() and LOGIN_WORDS.search(_text(page)):
+        # Many sites send you to their sign-in page once the account exists: sign in with it now.
+        result = _sign_in(page, host, (email, password), profile, cfg, otp.now(), wait_for_code)
     if result == "ok":
         with db.session(ws.db_path) as conn:
             conn.execute("UPDATE portal_credentials SET verified = 1 WHERE host = ?", (host,))

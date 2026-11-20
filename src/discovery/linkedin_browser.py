@@ -85,8 +85,16 @@ def fetch(ws, search_cfg: dict, cfg: dict) -> list[dict]:
             for s in search_cfg.get("searches", []):
                 for geo, remote, place in ((KENYA_GEO, False, "Kenya"), (WORLDWIDE_GEO, True, "Remote")):
                     for p in range(max_pages):
-                        page.goto(search_url(_plain_term(s["term"]), geo, remote, hours, p * 25), wait_until="domcontentloaded")
-                        page.wait_for_timeout(3000)
+                        try:  # LinkedIn can be slow; one slow page mustn't end the whole search
+                            page.goto(search_url(_plain_term(s["term"]), geo, remote, hours, p * 25),
+                                      wait_until="domcontentloaded", timeout=60000)
+                            page.wait_for_selector('a[href*="/jobs/view/"]', timeout=20000)
+                        except Exception as exc:
+                            log.info("LinkedIn search page slow or empty (%s): %s", s["term"][:40], str(exc)[:80])
+                            if lea.CHECKPOINT.search(page.url or ""):
+                                return list(found.values())
+                            break
+                        page.wait_for_timeout(1500)
                         if lea.CHECKPOINT.search(page.url):
                             log.warning("LinkedIn showed a security check; stopping the LinkedIn search for this run.")
                             return list(found.values())
@@ -107,7 +115,7 @@ def fetch(ws, search_cfg: dict, cfg: dict) -> list[dict]:
             todo = [j for j in found.values() if not any(w in j["title"].lower() for w in excl)]
             for j in todo[:max_details]:
                 try:
-                    page.goto(j["url"], wait_until="domcontentloaded")
+                    page.goto(j["url"], wait_until="domcontentloaded", timeout=60000)
                     page.wait_for_timeout(2000)
                     if lea.CHECKPOINT.search(page.url):
                         break

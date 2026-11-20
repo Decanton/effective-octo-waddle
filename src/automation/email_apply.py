@@ -32,6 +32,7 @@ APPLY_WORDS = re.compile(r"\b(send|e-?mail|submit|forward|apply|applications?|ad
 DOC_WORDS = re.compile(r"\b(cv|c\.v\.|resume|résumé|curriculum vitae|cover(ing)? letter|application|applications|documents)\b", re.I)
 # Anywhere in the address: these inboxes never take applications (accommodation requests, privacy, mailers).
 BAD_ANYWHERE = re.compile(r"accommodat|accessib|disabilit|privacy|gdpr|no-?reply|do-?not-?reply|unsubscribe|abuse|ethics|"
+                          r"belonging|diversity|inclusion|\bdei\b|"
                           r"whistle|compliance|legal|security|billing|invoice|press|media|webmaster", re.I)
 BAD_LOCAL = re.compile(r"^(no-?reply|do-?not-?reply|privacy|gdpr|dpo|legal|abuse|support|help|press|media|"
                        r"accommodations?|accessibility|disability|webmaster|unsubscribe|security|billing|sales)", re.I)

@@ -296,7 +296,12 @@ VERIFY_JS = r"""
     if (t === 'file') {
       const isCv = /resume|\bcv\b|curriculum/i.test(el.name + ' ' + el.id + ' ' + (el.getAttribute('aria-label') || ''))
                    || (el.closest('div,fieldset,label') && /resume|\bcv\b|curriculum/i.test(el.closest('div,fieldset,label').innerText || ''));
-      const f = el.files && el.files[0];
+      let f = el.files && el.files[0];
+      if (!f) {  // Greenhouse and others upload at once and empty the input, then show the file's name next to it
+        let p = el.parentElement;
+        for (let i = 0; i < 4 && p && !f; i++, p = p.parentElement)
+          if (/[\w-]+\.(docx|pdf|doc)\b/i.test(p.innerText || '')) f = { name: (p.innerText.match(/[\w-]+\.(docx|pdf|doc)\b/i) || [''])[0] };
+      }
       if ((req || (isCv && !cvAttached)) && !f) problems.push('no file attached: ' + tag);
       if (f && isCv && !/\.(docx|pdf|doc)$/i.test(f.name)) problems.push('CV is not a .docx/.pdf: ' + f.name);
       continue;

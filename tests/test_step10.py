@@ -294,3 +294,23 @@ def test_send_all_ready_works_in_review_mode(tmp_path, monkeypatch):
     s = load_settings()
     assert a.run(ws, s, submit_fn=fake)["sent"] == 0 and not sent
     assert a.run(ws, s, submit_fn=fake, approved=True)["sent"] == 1 and sent == [1]
+
+
+def test_sign_in_helpers_and_more_blocked_inboxes(tmp_path, monkeypatch):
+    from src.automation.email_apply import blocked_recipient
+    from src.automation.portal_accounts import login_id
+    assert login_id("owuordickens0001@gmail.com") == "owuordickens0001"
+    assert blocked_recipient("belonging@booksy.com") and blocked_recipient("hr@equitybank.co.ke") is None
+    import pytest
+    from tests.test_step4 import _browser_ok
+    if not _browser_ok():
+        pytest.skip("no browser")
+    from src.automation import form_fields
+    from src.automation.browser_manager import browser
+    from src.workspace import ensure_workspace
+    monkeypatch.setenv("JOBSPRINT_HEADLESS", "1")
+    with browser(ensure_workspace(tmp_path / "JobSprintAgent")) as ctx:
+        page = ctx.new_page()
+        page.set_content('<form><label for="a">Name</label><input id="a" value="x"><div><label for="resume">Resume/CV *</label>'
+                         '<input type="file" id="resume" required style="display:none"><span>Dickens_CV.docx</span></div></form>')
+        assert form_fields.verify(page) == []  # the site emptied the input after uploading; the file's name shows
