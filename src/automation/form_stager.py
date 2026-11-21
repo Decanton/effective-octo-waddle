@@ -130,7 +130,12 @@ def _candidates(page):
         if SKIP_TEXT.search(text):
             continue
         if href and not href.startswith(("mailto:", "javascript:")):
-            full = page.evaluate("h => new URL(h, location.href).href", href)
+            try:  # a malformed link (e.g. "http://") is just skipped
+                full = page.evaluate("h => { try { return new URL(h, location.href).href } catch (e) { return '' } }", href)
+            except Exception:
+                full = ""
+            if not full:
+                continue
             u = urlparse(full)
             if any(h in u.netloc for h in ATS_HOSTS):
                 ats.append(("link", full))
