@@ -1,9 +1,9 @@
 # What to search for. Edit freely; the agent reads this every run.
 max_age_hours: 48            # older or undated jobs are dropped (Kelly widened this to 48h on 2026-11-19)
 
-# Optional longer limits for company job boards, whose forms the agent can fill.
-# Example: {greenhouse: 72, lever: 72, ashby: 72}. Empty means 24 hours everywhere.
-max_age_hours_by_source: {}
+# Longer limits for company job boards, whose forms the agent fills best and which stay open for
+# weeks. Kelly chose 7 days for Greenhouse, Lever and Ashby on 2026-11-21; everything else stays 48h.
+max_age_hours_by_source: {greenhouse: 168, lever: 168, ashby: 168}
 
 # Each search runs on every site in `sites`. Track is a hint for CV tailoring.
 searches:
