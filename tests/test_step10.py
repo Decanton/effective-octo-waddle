@@ -424,3 +424,14 @@ def test_one_job_is_never_sent_twice(tmp_path):
     st["auto_submit"] = {**st["auto_submit"], "enabled": True, "only_hosts": [""], "max_per_day": 99}
     auto_submitter.run(ws, st, submit_fn=lambda ws_, sid, *a, **k: sent.append(sid) or {"state": "SUBMITTED"}, approved=True)
     assert len(sent) == 1
+
+
+def test_standard_yes_no_questions_typed_in_a_box():
+    from src.cv_tailor.single_template_tailor import load_profile
+    from src.intelligence import answer_engine as ae
+    e = ae.AnswerEngine(load_profile(), use_llm=False)
+    for label, kind in (("Have you worked at Customer.io before?", "text"),
+                        ("Do you have any post-employment restrictions?", "textarea"),
+                        ("Have you previously been employed by GitLab?", "combobox")):
+        a = e.answer(ae.Question(label=label, kind=kind, options=[], required=True), {"title": "x"}, "")
+        assert (a.value, a.source) == ("No", "standard"), label

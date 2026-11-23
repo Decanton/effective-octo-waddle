@@ -180,6 +180,9 @@ class AnswerEngine:
         yn = self.yes_no_default(label)
         if yn is not None and (q.kind in ("radio", "checkbox") or _yes_no_options(q.options)):
             return self._fit(q, yn, "standard")
+        if yn is not None and not q.options and q.kind in ("text", "textarea", "combobox", "select"):
+            # Asked as a box to type in (e.g. "Have you worked at Customer.io before?"): the same honest answer, as a word.
+            return Answer("Yes" if yn else "No", "standard")
         if q.kind in ("textarea", "text") and (OPEN_TEXT.search(label) or q.kind == "textarea"):
             return self._draft(q, job)
         return Answer(needs_user=q.required, note="no verified answer in your profile")
