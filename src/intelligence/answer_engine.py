@@ -111,6 +111,15 @@ class AnswerEngine:
             (r"\b(full )?(home |mailing |residential )?address\b", lambda: per.get("full_address") or per.get("location"), "profile"),
             (r"^(?!.*(authori|sponsor|visa|eligib|permit|legally|right to work|relocat|willing)).*\b(location|where are you (located|based)|current location|where do you (live|reside))\b", lambda: per.get("location"), "profile"),
             (r"^(?!.*(authori|sponsor|visa|eligib|permit|legally|right to work|relocat|willing)).*\bcountry\b", lambda: per.get("country"), "profile"),
+            # School results (Kelly, 2026-11-24: "I got As in all"), e.g. Canonical's questionnaire.
+            (r"(high ?school|secondary|kcse|o-?levels?|a-?levels?|matric).{0,80}\b(math|maths|mathematics)\b|"
+             r"\b(math|maths|mathematics)\b.{0,80}(high ?school|secondary|kcse|o-?levels?|a-?levels?|matric)",
+             lambda: self.s.get("high_school_mathematics"), "screening"),
+            (r"(high ?school|secondary|kcse|o-?levels?|a-?levels?|matric).{0,80}\b(language|english|literature)\b|"
+             r"\b(native language|first language|english|language)\b.{0,80}(high ?school|secondary|kcse|o-?levels?|a-?levels?|matric)",
+             lambda: self.s.get("high_school_language"), "screening"),
+            (r"\b(degree|bachelor.?s?|university|undergraduate)\b.{0,40}\b(result|grade|class|classification|gpa|honou?rs|perform)",
+             lambda: self.s.get("degree_result"), "screening"),
             (r"\b(highest|level of) (education|degree)\b|\bdegree\b", lambda: self.s.get("highest_education"), "screening"),
             (r"\b(field|area) of study\b|\bmajor\b|\bdiscipline\b", lambda: self.s.get("degree_field"), "screening"),
             (r"\b(school|university|college)\b", lambda: self.p["education"][0]["institution"], "profile"),

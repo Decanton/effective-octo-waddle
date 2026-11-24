@@ -860,7 +860,11 @@
     "expected_salary_monthly_usd_kenya": 800,
     "expected_salary_monthly_usd_abroad": 2500,
     "usd_to_kes": 129,
-    "_salary_rule": "USD 800/month for jobs in Kenya, USD 2,500/month for jobs abroad or remote for foreign companies, USD 20/hour for AI training work (stated 2026-11-19)."
+    "_salary_rule": "USD 800/month for jobs in Kenya, USD 2,500/month for jobs abroad or remote for foreign companies, USD 20/hour for AI training work (stated 2026-11-19).",
+    "high_school_mathematics": "A",
+    "high_school_language": "A",
+    "degree_result": "",
+    "_school_results": "Kelly, 2026-11-24: 'I got As in all' (high-school maths and languages). degree_result is still to ask; empty means the form waits for Kelly."
   },
   "ranking_weights": {
     "fit": 0.55,

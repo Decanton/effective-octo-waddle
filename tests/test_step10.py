@@ -435,3 +435,13 @@ def test_standard_yes_no_questions_typed_in_a_box():
                         ("Have you previously been employed by GitLab?", "combobox")):
         a = e.answer(ae.Question(label=label, kind=kind, options=[], required=True), {"title": "x"}, "")
         assert (a.value, a.source) == ("No", "standard"), label
+
+
+def test_school_results_from_profile():
+    from src.cv_tailor.single_template_tailor import load_profile
+    from src.intelligence import answer_engine as ae
+    e = ae.AnswerEngine(load_profile(), use_llm=False)
+    ask = lambda label: e.answer(ae.Question(label=label, kind="textarea", options=[], required=True), {"title": "x"}, "")
+    assert ask("How did you perform in mathematics at high school?").value == "A"
+    assert ask("How did you do in your native language in high school?").value == "A"
+    assert ask("Which university did you attend?").value == "University of Nairobi"
