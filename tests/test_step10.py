@@ -445,3 +445,4 @@ def test_school_results_from_profile():
     assert ask("How did you perform in mathematics at high school?").value == "A"
     assert ask("How did you do in your native language in high school?").value == "A"
     assert ask("Which university did you attend?").value == "University of Nairobi"
+    assert ask("What was your bachelor's degree result?").value.startswith("Second Class Honours (Upper")

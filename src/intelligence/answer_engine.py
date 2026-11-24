@@ -120,6 +120,7 @@ class AnswerEngine:
              lambda: self.s.get("high_school_language"), "screening"),
             (r"\b(degree|bachelor.?s?|university|undergraduate)\b.{0,40}\b(result|grade|class|classification|gpa|honou?rs|perform)",
              lambda: self.s.get("degree_result"), "screening"),
+            (r"\b(certificat\w*|bootcamp|course)\b.{0,40}\b(result|grade|perform)", lambda: self.s.get("certification_results"), "screening"),
             (r"\b(highest|level of) (education|degree)\b|\bdegree\b", lambda: self.s.get("highest_education"), "screening"),
             (r"\b(field|area) of study\b|\bmajor\b|\bdiscipline\b", lambda: self.s.get("degree_field"), "screening"),
             (r"\b(school|university|college)\b", lambda: self.p["education"][0]["institution"], "profile"),
