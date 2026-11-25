@@ -113,18 +113,20 @@ def run(ws, settings: dict | None = None, submit_fn=None, approved: bool = False
         rows = conn.execute("SELECT s.*, j.title, j.company FROM staged_forms s JOIN jobs j ON j.id = s.job_id "
                             "WHERE s.state = 'READY_TO_SUBMIT' AND s.id = (SELECT MAX(id) FROM staged_forms WHERE job_id = s.job_id) "
                             "ORDER BY j.priority_score DESC").fetchall()
+    from . import company_rules
+    company_limits = settings.get("company_limits") or {}
     done_keys = set()
     for row in rows:
-        key = ((row["company"] or "").strip().lower(), (row["title"] or "").strip().lower())
-        if row["company"]:  # never send one job twice (found under two links, or filled twice)
+        key = (company_rules.norm_company(row["company"]), company_rules.norm_title(row["title"]))
+        if row["company"]:  # never send one role twice, and keep to each company's limit
+            job = {"id": row["job_id"], "company": row["company"], "title": row["title"]}
             with db.session(ws.db_path) as conn:
-                already = key in done_keys or conn.execute(
-                    "SELECT 1 FROM staged_forms s JOIN jobs j ON j.id = s.job_id WHERE s.state IN ('SUBMITTED','SENT_UNCONFIRMED') "
-                    "AND lower(trim(j.company)) = ? AND lower(trim(j.title)) = ? AND s.id != ? LIMIT 1", (*key, row["id"])).fetchone()
-                if already:
-                    conn.execute("UPDATE staged_forms SET state = 'SKIPPED', error = 'already sent (same job)' WHERE id = ?", (row["id"],))
-                    db.set_job_status(conn, row["job_id"], "SKIPPED", "already sent (same job under another link)")
-                    log.info("Skipped a repeat of a job already sent: %s @ %s", row["title"][:60], row["company"])
+                why = "already sent (same role)" if key in done_keys else company_rules.blocked(conn, job, company_limits)
+                if why:
+                    conn.execute("UPDATE staged_forms SET state = 'SKIPPED', error = ? WHERE id = ?", (why, row["id"]))
+                    db.set_job_status(conn, row["job_id"], "SKIPPED", why)
+                    counts["why"].append(f"{row['company']}: {why}")
+                    log.info("Not sent: %s @ %s (%s)", row["title"][:60], row["company"], why)
                     continue
             done_keys.add(key)
         by_email = (row["form_url"] or "").startswith("mailto:")

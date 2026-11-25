@@ -115,6 +115,7 @@ def test_auto_send_rules_and_daily_cap(tmp_path):
 
     s = load_settings()
     s["auto_submit"].update(enabled=True, max_per_day=2, accept_required_consents=False)
+    s["company_limits"] = {"default": {"max": 99, "days": 60}}  # every test job is at "Acme"
     counts = auto_submitter.run(ws, s, submit_fn=fake_submit)
     assert [c[0] for c in calls] == [ok1, ok2] and counts["sent"] == 2  # best first, capped at 2
     assert counts["waiting_for_you"] >= 4

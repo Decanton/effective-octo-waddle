@@ -148,3 +148,11 @@ linkedin_easy_apply:
   # to the employer's form. Steps are human-paced.
   enabled: true
   max_per_day: 40
+
+company_limits:
+  # At most `max` applications to one company in `days` days. Companies that state their own
+  # limit are listed by name (their careers pages say so); everyone else gets the default.
+  default: {max: 3, days: 60}
+  per_company:
+    Supabase: {max: 3, days: 60}
+    ElevenLabs: {max: 2, days: 90}

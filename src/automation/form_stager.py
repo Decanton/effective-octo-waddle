@@ -387,6 +387,13 @@ def stage_job(page, conn, ws, job: dict, engine: AnswerEngine, profile: dict) ->
     if site:
         db.set_job_status(conn, jid, "SKIPPED", f"{site} is on the blocked list (subscription wall)")
         return "SKIPPED"
+    from ..settings import load_settings
+    from .company_rules import blocked as company_blocked
+    why = company_blocked(conn, job, load_settings().get("company_limits"))
+    if why:
+        log.info("  skipped: %s", why)
+        db.set_job_status(conn, jid, "SKIPPED", why)
+        return "SKIPPED"
     cv_path, cv = build_cv(f"{job['title']}\n{job.get('description') or ''}",
                            ws.tailored_cvs / f"{jid}_{_safe(job.get('company'))}_{_safe(job['title'])}.docx",
                            profile=profile)
@@ -527,7 +534,12 @@ def run(ws, limit: int | None = None, only_ids: list[int] | None = None) -> dict
     if not engine.use_llm:
         log.warning("No LLM key found in .env, so written questions will be left for you.")
     counts = {}
+    from ..settings import load_settings
+    from .company_rules import prune_ready
     with db.session(ws.db_path) as conn:
+        pruned = prune_ready(conn, load_settings().get("company_limits"))
+        if pruned:
+            log.info("Took %d waiting forms off the list: repeats, or over a company's application limit.", pruned)
         pool = [dict(r) for r in conn.execute(
             "SELECT * FROM jobs WHERE status = 'QUALIFIED' ORDER BY priority_score DESC LIMIT 600")]
         if only_ids is not None:

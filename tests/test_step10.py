@@ -445,4 +445,53 @@ def test_school_results_from_profile():
     assert ask("How did you perform in mathematics at high school?").value == "A"
     assert ask("How did you do in your native language in high school?").value == "A"
     assert ask("Which university did you attend?").value == "University of Nairobi"
-    assert ask("What was your bachelor's degree result?").value.startswith("Second Class Honours (Upper")
+    assert ask("What was your bachelor's degree result?").value.startswith("Second Class Honours, Upper Division")
+
+
+def test_company_limits_repeats_and_page_furniture_in_titles(tmp_path):
+    from src import database as db
+    from src.automation import auto_submitter, company_rules
+    from src.discovery.common import new_job
+    from src.workspace import ensure_workspace
+    from tests.test_step4 import _staged
+    assert new_job(title="Jobs similar to @ Senior Software Developer", company="Jobs similar to")["title"] == "Senior Software Developer"
+    assert new_job(title="x", company="Jobs similar to")["company"] is None
+    assert company_rules.norm_company("Supabase, Inc.") == company_rules.norm_company("supabase")
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    with db.session(ws.db_path) as c:
+        for i in range(3):  # three Supabase applications already sent
+            sid = _staged(c, f"https://jobs.ashbyhq.com/supabase/{i}", title=f"Old role {i}")
+            c.execute("UPDATE staged_forms SET state = 'SUBMITTED', submitted_at = ? WHERE id = ?", (db.now_iso(), sid))
+        c.execute("UPDATE jobs SET company = 'Supabase'")
+        new = _staged(c, "https://jobs.ashbyhq.com/supabase/9", title="New role")
+        c.execute("UPDATE jobs SET company = 'Supabase' WHERE id = (SELECT job_id FROM staged_forms WHERE id = ?)", (new,))
+        rep = _staged(c, "https://apply.workable.com/acme/1", title="Old role 0")  # Acme: a different company, fine
+        dup = _staged(c, "https://apply.workable.com/supabase/1", title="Old role 1")
+        c.execute("UPDATE jobs SET company = 'Supabase Inc' WHERE id = (SELECT job_id FROM staged_forms WHERE id = ?)", (dup,))
+        cfg = {"default": {"max": 3, "days": 60}}
+        assert "limit" in company_rules.blocked(c, {"id": 999, "company": "Supabase", "title": "Another"}, cfg)
+        assert "already applied" in company_rules.blocked(c, {"id": 999, "company": "SUPABASE", "title": "old role 1"}, cfg)
+    from src.settings import load_settings
+    st = load_settings()
+    st["auto_submit"] = {**st["auto_submit"], "enabled": True, "only_hosts": [""], "max_per_day": 99, "per_site_default": 99}
+    sent = []
+    auto_submitter.run(ws, st, submit_fn=lambda ws_, sid, *a, **k: sent.append(sid) or {"state": "SUBMITTED"}, approved=True)
+    assert sent == [rep]
+
+
+def test_waiting_forms_over_a_company_limit_are_taken_off(tmp_path):
+    from src import database as db
+    from src.automation import company_rules
+    from src.workspace import ensure_workspace
+    from tests.test_step4 import _staged
+    ws = ensure_workspace(tmp_path / "JobSprintAgent")
+    db.init_db(ws.db_path)
+    with db.session(ws.db_path) as c:
+        sent = _staged(c, "https://jobs.ashbyhq.com/supabase/0", title="Old")
+        c.execute("UPDATE staged_forms SET state = 'SUBMITTED', submitted_at = ? WHERE id = ?", (db.now_iso(), sent))
+        ids = [_staged(c, f"https://jobs.ashbyhq.com/supabase/{i}", title=f"Role {i}", prio=1 - i / 10) for i in range(1, 5)]
+        c.execute("UPDATE jobs SET company = 'Supabase'")
+        assert company_rules.prune_ready(c, {"default": {"max": 3, "days": 60}}) == 2
+        left = [r[0] for r in c.execute("SELECT id FROM staged_forms WHERE state = 'READY_TO_SUBMIT' ORDER BY id")]
+        assert left == ids[:2]  # the two best-ranked stay

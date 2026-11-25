@@ -45,14 +45,23 @@ def html_to_text(html: str | None) -> str:
     return re.sub(r"[ \t]+", " ", re.sub(r"\n\s*\n+", "\n", text)).strip()
 
 
+def clean_title(title: str | None) -> str:
+    """Drop page furniture some boards wrap around a title ('Jobs similar to @ X', 'Apply for X')."""
+    t = " ".join(unescape(title or "").split())
+    t = re.sub(r"^(jobs? )?similar (jobs? )?to\s*[:@-]?\s*|^(apply (now )?for|job:)\s+", "", t, flags=re.I)
+    return t.lstrip("@:- ").strip()
+
+
 def new_job(**kw) -> dict:
     """Normalise a job record so every fetcher returns the same fields."""
     keys = ("source", "external_id", "url", "apply_url", "title", "company", "location",
             "is_remote", "description", "posted_at", "age_hours", "applicant_count", "track")
     job = {k: kw.get(k) for k in keys}
-    job["title"] = " ".join(unescape(job["title"] or "").split())
+    job["title"] = clean_title(job["title"])
     if job["company"]:
         job["company"] = unescape(job["company"]).strip()
+        if re.match(r"(jobs? )?similar (jobs? )?to\b|^@", job["company"], re.I):
+            job["company"] = None
     job["apply_url"] = job["apply_url"] or job["url"]
     if job["is_remote"] is None:
         blob = f"{job['title']} {job['location'] or ''}".lower()
