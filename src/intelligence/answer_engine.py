@@ -58,8 +58,10 @@ def pick_option(options: list[str], wanted) -> str | None:
     for o in options:
         if _norm(o) == w:
             return o
+    if len(w) < 3:
+        return None
     for o in options:
-        if w and (w in _norm(o) or _norm(o) in w):
+        if w in _norm(o) or (len(_norm(o)) >= 3 and _norm(o) in w):
             return o
     return None
 
@@ -111,17 +113,7 @@ class AnswerEngine:
             (r"\b(full )?(home |mailing |residential )?address\b", lambda: per.get("full_address") or per.get("location"), "profile"),
             (r"^(?!.*(authori|sponsor|visa|eligib|permit|legally|right to work|relocat|willing)).*\b(location|where are you (located|based)|current location|where do you (live|reside))\b", lambda: per.get("location"), "profile"),
             (r"^(?!.*(authori|sponsor|visa|eligib|permit|legally|right to work|relocat|willing)).*\bcountry\b", lambda: per.get("country"), "profile"),
-            # School results (Kelly, 2026-11-24: "I got As in all"), e.g. Canonical's questionnaire.
-            (r"(high ?school|secondary|kcse|o-?levels?|a-?levels?|matric).{0,80}\b(math|maths|mathematics)\b|"
-             r"\b(math|maths|mathematics)\b.{0,80}(high ?school|secondary|kcse|o-?levels?|a-?levels?|matric)",
-             lambda: self.s.get("high_school_mathematics"), "screening"),
-            (r"(high ?school|secondary|kcse|o-?levels?|a-?levels?|matric).{0,80}\b(language|english|literature)\b|"
-             r"\b(native language|first language|english|language)\b.{0,80}(high ?school|secondary|kcse|o-?levels?|a-?levels?|matric)",
-             lambda: self.s.get("high_school_language"), "screening"),
-            (r"\b(degree|bachelor.?s?|university|undergraduate)\b.{0,40}\b(result|grade|class|classification|gpa|honou?rs|perform)",
-             lambda: self.s.get("degree_result"), "screening"),
-            (r"\b(certificat\w*|bootcamp|course)\b.{0,40}\b(result|grade|perform)", lambda: self.s.get("certification_results"), "screening"),
-            (r"\b(highest|level of) (education|degree)\b|\bdegree\b", lambda: self.s.get("highest_education"), "screening"),
+            (r"^(?!.*\b(how many|since you graduated|years)\b)(?=.*(\b(highest|level of) (education|degree)\b|\bdegree\b))", lambda: self.s.get("highest_education"), "screening"),
             (r"\b(field|area) of study\b|\bmajor\b|\bdiscipline\b", lambda: self.s.get("degree_field"), "screening"),
             (r"\b(school|university|college)\b", lambda: self.p["education"][0]["institution"], "profile"),
             (r"years? of (professional |relevant |work )?experience|how many years", lambda: self.s.get("years_of_experience_total"), "screening"),
@@ -139,6 +131,31 @@ class AnswerEngine:
             (r"driver.?s licen[cs]e", lambda: self.s.get("has_drivers_license"), "screening"),
             (r"how did you (hear|find|learn)|\bsource\b|\breferr", lambda: self.s.get("how_did_you_hear"), "screening"),
         ]
+        HS = r"(high ?school|secondary school|kcse|o-?levels?|a-?levels?|matric)"
+        # Specific factual questions, checked before anything else (long questions often contain words
+        # like "describes" that would otherwise send them to the AI writer).
+        self.priority = [
+            (rf"(rationale|evidence|proof|scores?).{{0,120}}{HS}|{HS}.{{0,120}}(rationale|evidence)",
+             lambda: self.s.get("high_school_evidence"), "screening"),
+            (rf"{HS}.{{0,80}}\b(math|maths|mathematics)\b|\b(math|maths|mathematics)\b.{{0,80}}{HS}",
+             lambda: "__hs_math__", "screening"),
+            (rf"{HS}.{{0,80}}\b(language|english|literature)\b|\b(native language|first language|english|language)\b.{{0,80}}{HS}",
+             lambda: "__hs_lang__", "screening"),
+            (r"how many (companies|employers|organi[sz]ations|jobs)", lambda: self.s.get("companies_since_graduation"), "screening"),
+            (r"\b(degree|bachelor.?s?|university|undergraduate)\b.{0,40}\b(result|grade|class|classification|gpa|honou?rs|perform)",
+             lambda: self.s.get("degree_result"), "screening"),
+            (r"\b(certificat\w*|bootcamp|course)\b.{0,40}\b(result|grade|perform)", lambda: self.s.get("certification_results"), "screening"),
+        ]
+
+    RANKING = re.compile(r"\btop \d|percent|%|cannot recall|not a strength", re.I)
+
+    def _school(self, q: Question, key: str) -> Answer:
+        """A school result. Picked lists that rank you ("Top 5%") use the rank you gave, never a guess."""
+        if q.options and any(self.RANKING.search(o) for o in q.options):
+            opt = pick_option(q.options, self.s.get(key + "_rank") or "")
+            return Answer(opt, "screening") if opt else Answer(needs_user=q.required, note="pick your rank yourself (only your grade is in your profile)")
+        val = self.s.get(key)
+        return self._fit(q, val, "screening") if val else Answer(needs_user=q.required)
 
     def answer(self, q: Question, job: dict | None = None, cv_path: str | None = None) -> Answer:
         label = _norm(q.label)
@@ -158,9 +175,19 @@ class AnswerEngine:
             if q.kind in ("text", "textarea") and not q.required:
                 return Answer(None, "eeo")
             return Answer(needs_user=q.required, note="demographic question with no 'decline' option")
+        for pattern, getter, source in self.priority:
+            if re.search(pattern, label):
+                val = getter()
+                if val in ("__hs_math__", "__hs_lang__"):
+                    return self._school(q, "high_school_mathematics" if val == "__hs_math__" else "high_school_language")
+                if val is None or val == "":
+                    return Answer(needs_user=q.required, note=f"fill '{q.label[:80]}' in screening_answers")
+                return self._fit(q, val, source)
         if q.kind in ("text", "textarea") and OPEN_TEXT.search(label):
             return self._draft(q, job)
         for pattern, getter, source in self.rules:
+            if q.kind == "textarea" and source == "profile" and len(label) > 80:
+                continue  # a long written question that happens to mention "region" or "company" isn't asking for a name
             if re.search(pattern, label):
                 val = getter()
                 if val == "__phone__":
@@ -300,7 +327,7 @@ class AnswerEngine:
         return None
 
     def _fit(self, q: Question, val, source: str) -> Answer:
-        if q.kind in ("select", "radio"):
+        if q.kind in ("select", "radio") or (q.kind == "combobox" and q.options):
             opt = pick_option(q.options, val)
             if opt is None and isinstance(val, (int, float)) and not isinstance(val, bool):
                 opt = _pick_number_range(q.options, val)

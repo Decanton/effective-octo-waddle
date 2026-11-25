@@ -495,3 +495,24 @@ def test_waiting_forms_over_a_company_limit_are_taken_off(tmp_path):
         assert company_rules.prune_ready(c, {"default": {"max": 3, "days": 60}}) == 2
         left = [r[0] for r in c.execute("SELECT id FROM staged_forms WHERE state = 'READY_TO_SUBMIT' ORDER BY id")]
         assert left == ids[:2]  # the two best-ranked stay
+
+
+def test_canonical_questionnaire_never_guessed():
+    from src.cv_tailor.single_template_tailor import load_profile
+    from src.intelligence import answer_engine as ae
+    e = ae.AnswerEngine(load_profile(), use_llm=False)
+    rank = ["Cannot recall", "Not a strength", "Top 50% at school", "Top 20%", "Top 10%", "Top 5%"]
+    ask = lambda label, kind="textarea", opts=(): e.answer(ae.Question(label=label, kind=kind, options=list(opts), required=True),
+                                                            {"title": "x", "company": "Canonical"}, "")
+    degree = ask("What was your bachelor’s university degree result, or expected result if you have not yet graduated? Please "
+                 "include the grading system e.g. ‘2:1’. We have hired outstanding individuals who did not attend or "
+                 "complete university. If this describes you, please continue and enter ‘no degree’.")
+    assert degree.value.startswith("Second Class Honours")
+    math = ask("How did you perform in mathematics at high school?", "combobox", rank)
+    assert math.value is None and math.needs_user  # never "Cannot recall" from the grade "A"
+    assert ask("Please share your rationale or evidence for the high school performance selections above, e.g. JAMB, "
+               "matriculation results, IB results etc. in your region").value != "Nairobi County"
+    n = ask("In the past ten years, since you graduated your first undergraduate degree, how many companies have you worked for?",
+            "combobox", [str(i) for i in range(10)])
+    assert n.value != "Bachelor's degree"
+    assert ae.pick_option(rank, "A") is None
