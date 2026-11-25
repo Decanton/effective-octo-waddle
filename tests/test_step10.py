@@ -516,3 +516,4 @@ def test_canonical_questionnaire_never_guessed():
             "combobox", [str(i) for i in range(10)])
     assert n.value != "Bachelor's degree"
     assert ae.pick_option(rank, "A") is None
+    assert ask("How did you perform in mathematics at high school?", "combobox").value is None  # options unread

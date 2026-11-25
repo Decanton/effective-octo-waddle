@@ -59,6 +59,10 @@ def create_app(ws) -> FastAPI:
             if d["company"] and key in seen:  # the same job found under two links: show it once
                 continue
             seen.add(key)
+            from ..discovery.common import clean_title
+            d["title"] = clean_title(d["title"])  # rows saved before titles were cleaned
+            if d["company"] and d["company"].lower().startswith(("jobs similar", "similar")):
+                d["company"] = None
             d["answers"] = json.loads(d.pop("answers_json") or "[]")
             d["missing"] = json.loads(d.pop("missing_json") or "[]")
             d["has_shot"] = bool(d.pop("shot"))

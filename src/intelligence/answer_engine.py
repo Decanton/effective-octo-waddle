@@ -154,6 +154,8 @@ class AnswerEngine:
         if q.options and any(self.RANKING.search(o) for o in q.options):
             opt = pick_option(q.options, self.s.get(key + "_rank") or "")
             return Answer(opt, "screening") if opt else Answer(needs_user=q.required, note="pick your rank yourself (only your grade is in your profile)")
+        if q.kind not in ("text", "textarea"):  # a list we couldn't read may be a rank list: don't type a grade into it
+            return Answer(needs_user=q.required, note="pick this yourself")
         val = self.s.get(key)
         return self._fit(q, val, "screening") if val else Answer(needs_user=q.required)
 
